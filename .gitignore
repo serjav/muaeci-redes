@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Configuracion local (IP del robot, etc.)
+.env
+*.local.*
+
+# Capturas de datos grandes (versionar solo muestras pequenas a mano)
+practica*/data/*.csv
+practica*/data/*.bin
+practica*/data/*.log
+!practica*/data/.gitkeep
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
