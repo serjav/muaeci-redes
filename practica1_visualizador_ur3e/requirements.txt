@@ -1,0 +1,2 @@
+# Dependencias de la practica 1 (anadir segun se vayan usando)
+# Instalar con: pip install -r requirements.txt
