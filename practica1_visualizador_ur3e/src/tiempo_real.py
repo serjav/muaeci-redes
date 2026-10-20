@@ -4,9 +4,11 @@ import socket
 import struct
 import threading
 import time
+from collections.abc import Callable
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
+# TODO: always ask for the robot IP before starting any robot instead of relying on this default.
 DEFAULT_HOST = "10.172.18.80"
 PORT = 30003
 RECV_SIZE = 65536  # large enough to drain any backlog in one read
@@ -20,14 +22,10 @@ MIN_MSG_LEN = Q_ACTUAL_OFFSET + Q_ACTUAL.size
 MAX_MSG_LEN = 4096  # real-time messages are ~1.1 KB, anything larger is corrupt
 SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 
+Mover = Callable[[list[float]], None]  # moves one simulated robot to the given joints
 
-def stream_joints(
-    host: str,
-    robot: UR3eRG2,
-    robot_id: int,
-    simulator_lock: threading.Lock,
-    stop: threading.Event,
-) -> None:
+
+def stream_joints(host: str, move: Mover, stop: threading.Event) -> None:
     """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
     with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
@@ -45,25 +43,16 @@ def stream_joints(
                 del buffer[:msg_len]
             # Only the newest message is applied so a slow move_robot never lags behind.
             if joints is not None:
-                with simulator_lock:
-                    robot.move_robot(robot_id, list(joints))
-                logging.info("Robot id: %s", robot_id)
+                move(list(joints))
         if not stop.is_set():
             logging.warning("Connection closed by the robot")
 
 
-def run_robot(
-    host: str,
-    robot: UR3eRG2,
-    robot_id: int,
-    simulator_lock: threading.Lock,
-    stop: threading.Event,
-) -> None:
+def run_robot(host: str, move: Mover, stop: threading.Event) -> None:
     """Keep one robot connected, reconnecting after errors, until stop is set."""
-    logging.info("Controlling simulator body ID %d", robot_id)
     while not stop.is_set():
         try:
-            stream_joints(host, robot, robot_id, simulator_lock, stop)
+            stream_joints(host, move, stop)
         except OSError as error:
             logging.warning("Connection error: %s", error)
         except ValueError as error:
@@ -71,6 +60,14 @@ def run_robot(
             return
         if not stop.wait(RECONNECT_DELAY):
             logging.info("Reconnecting...")
+
+
+def make_mover(simulator: UR3eRG2, robot_id: int, lock: threading.Lock) -> Mover:
+    """Return a function that moves one robot of the shared simulator, one thread at a time."""
+    def move(joints: list[float]) -> None:
+        with lock:
+            simulator.move_robot(robot_id, joints)
+    return move
 
 
 def main():
@@ -82,7 +79,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(threadName)s] %(message)s")
 
     stop = threading.Event()
-    robot = UR3eRG2()
+    simulator = UR3eRG2()
     simulator_lock = threading.Lock()
     hosts = dict.fromkeys(args.hosts)  # drop duplicate IPs, keep order
     threads = []
@@ -90,13 +87,14 @@ def main():
         if index == 0:
             robot_id = 0
         else:
-            robot_id = robot.spawn_robot(
+            robot_id = simulator.spawn_robot(
                 [index * SPAWN_SPACING, 0, 0, 0, 0, 0]
             )
+        logging.info("Robot %s controls simulator body %d", host, robot_id)
         threads.append(
             threading.Thread(
                 target=run_robot,
-                args=(host, robot, robot_id, simulator_lock, stop),
+                args=(host, make_mover(simulator, robot_id, simulator_lock), stop),
                 name=host,
             )
         )
