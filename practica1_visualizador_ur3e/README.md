@@ -21,3 +21,12 @@ python -m venv .venv
 source .venv/bin/activate        # En Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+## Uso
+
+```bash
+python src/primaria.py                       # puerto primario (30001), IP por defecto
+python src/tiempo_real.py --host 192.168.1.157   # puerto de tiempo real (30003)
+```
+
+Los scripts se reconectan solos si se pierde la conexion y se detienen con `Ctrl+C`.

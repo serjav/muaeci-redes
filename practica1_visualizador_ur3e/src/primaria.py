@@ -1,11 +1,15 @@
+import argparse
 import socket
 import struct
+import time
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-HOST = "192.168.1.157"
+DEFAULT_HOST = "192.168.1.157"
 PORT = 30001
 RECV_SIZE = 65536  # large enough to drain any backlog in one read
+TIMEOUT = 2.0  # seconds without data before the connection is considered lost
+RECONNECT_DELAY = 1.0  # seconds to wait before reconnecting
 
 HEADER = struct.Struct(">iB")  # length (int32) + type (uint8)
 JOINT_RECORD = struct.Struct(">dddffffB")  # one joint in the Joint Data sub-package
@@ -28,10 +32,11 @@ def parse_joint_positions(robot_state: bytes) -> list[float] | None:
     return None
 
 
-def main():
-    robot = UR3eRG2()
+def stream_joints(host: str, robot: UR3eRG2) -> None:
+    """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
-    with socket.create_connection((HOST, PORT)) as client:
+    with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
+        print(f"Connected to {host}:{PORT}")
         while data := client.recv(RECV_SIZE):
             buffer.extend(data)
             joints = None
@@ -49,6 +54,25 @@ def main():
             if joints is not None:
                 print(f"Joint positions: {joints}")
                 robot.move_robot(0, joints)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="UR3e primary port client")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="robot IP address")
+    args = parser.parse_args()
+
+    robot = UR3eRG2()
+    try:
+        while True:
+            try:
+                stream_joints(args.host, robot)
+                print("Connection closed by the robot")
+            except OSError as error:
+                print(f"Connection error: {error}")
+            print(f"Reconnecting in {RECONNECT_DELAY} s...")
+            time.sleep(RECONNECT_DELAY)
+    except KeyboardInterrupt:
+        print("Stopped by user")
 
 
 if __name__ == "__main__":
