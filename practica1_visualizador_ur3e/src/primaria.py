@@ -1,6 +1,8 @@
 import argparse
+import logging
 import socket
 import struct
+import threading
 import time
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
@@ -15,6 +17,7 @@ HEADER = struct.Struct(">iB")  # length (int32) + type (uint8)
 JOINT_RECORD = struct.Struct(">dddffffB")  # one joint in the Joint Data sub-package
 ROBOT_STATE = 16
 JOINT_DATA = 1
+MAX_MSG_LEN = 2**20  # 1 MiB; primary messages vary in size, anything larger is corrupt
 
 
 def parse_joint_positions(robot_state: bytes) -> list[float] | None:
@@ -32,17 +35,17 @@ def parse_joint_positions(robot_state: bytes) -> list[float] | None:
     return None
 
 
-def stream_joints(host: str, robot: UR3eRG2) -> None:
+def stream_joints(host: str, robot: UR3eRG2, stop: threading.Event) -> None:
     """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
     with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
-        print(f"Connected to {host}:{PORT}")
-        while data := client.recv(RECV_SIZE):
+        logging.info("Connected to %s:%d", host, PORT)
+        while not stop.is_set() and (data := client.recv(RECV_SIZE)):
             buffer.extend(data)
             joints = None
             while len(buffer) >= HEADER.size:
                 msg_len, msg_type = HEADER.unpack_from(buffer)
-                if msg_len < HEADER.size:
+                if not HEADER.size <= msg_len <= MAX_MSG_LEN:
                     raise ValueError(f"Invalid message length: {msg_len}")
                 if len(buffer) < msg_len:
                     break
@@ -52,27 +55,49 @@ def stream_joints(host: str, robot: UR3eRG2) -> None:
                     joints = parse_joint_positions(body) or joints
             # Only the newest message is applied so a slow move_robot never lags behind.
             if joints is not None:
-                print(f"Joint positions: {joints}")
+                logging.info("Joint positions: %s", joints)
                 robot.move_robot(0, joints)
+        if not stop.is_set():
+            logging.warning("Connection closed by the robot")
+
+
+def run_robot(host: str, robot: UR3eRG2, stop: threading.Event) -> None:
+    """Keep one robot connected, reconnecting after errors, until stop is set."""
+    while not stop.is_set():
+        try:
+            stream_joints(host, robot, stop)
+        except OSError as error:
+            logging.warning("Connection error: %s", error)
+        except ValueError as error:
+            logging.error("%s. Stopping this robot", error)
+            return
+        if not stop.wait(RECONNECT_DELAY):
+            logging.info("Reconnecting...")
 
 
 def main():
     parser = argparse.ArgumentParser(description="UR3e primary port client")
-    parser.add_argument("--host", default=DEFAULT_HOST, help="robot IP address")
+    parser.add_argument(
+        "--hosts", nargs="+", default=[DEFAULT_HOST], metavar="HOST", help="robot IP addresses"
+    )
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(threadName)s] %(message)s")
 
-    robot = UR3eRG2()
+    stop = threading.Event()
+    threads = [
+        threading.Thread(target=run_robot, args=(host, UR3eRG2(), stop), name=host)
+        for host in dict.fromkeys(args.hosts)  # drop duplicate IPs, keep order
+    ]
+    for thread in threads:
+        thread.start()
     try:
-        while True:
-            try:
-                stream_joints(args.host, robot)
-                print("Connection closed by the robot")
-            except OSError as error:
-                print(f"Connection error: {error}")
-            print(f"Reconnecting in {RECONNECT_DELAY} s...")
-            time.sleep(RECONNECT_DELAY)
+        while any(thread.is_alive() for thread in threads):
+            time.sleep(0.5)
     except KeyboardInterrupt:
-        print("Stopped by user")
+        logging.info("Stopped by user")
+        stop.set()
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == "__main__":
