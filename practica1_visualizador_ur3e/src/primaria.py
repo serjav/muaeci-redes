@@ -7,7 +7,7 @@ import time
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-DEFAULT_HOST = "192.168.1.157"
+DEFAULT_HOST = "10.172.18.80"
 PORT = 30001
 RECV_SIZE = 65536  # large enough to drain any backlog in one read
 TIMEOUT = 2.0  # seconds without data before the connection is considered lost
@@ -18,6 +18,7 @@ JOINT_RECORD = struct.Struct(">dddffffB")  # one joint in the Joint Data sub-pac
 ROBOT_STATE = 16
 JOINT_DATA = 1
 MAX_MSG_LEN = 2**20  # 1 MiB; primary messages vary in size, anything larger is corrupt
+SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 
 
 def parse_joint_positions(robot_state: bytes) -> list[float] | None:
@@ -35,7 +36,13 @@ def parse_joint_positions(robot_state: bytes) -> list[float] | None:
     return None
 
 
-def stream_joints(host: str, robot: UR3eRG2, stop: threading.Event) -> None:
+def stream_joints(
+    host: str,
+    robot: UR3eRG2,
+    robot_id: int,
+    simulator_lock: threading.Lock,
+    stop: threading.Event,
+) -> None:
     """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
     with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
@@ -56,16 +63,25 @@ def stream_joints(host: str, robot: UR3eRG2, stop: threading.Event) -> None:
             # Only the newest message is applied so a slow move_robot never lags behind.
             if joints is not None:
                 logging.info("Joint positions: %s", joints)
-                robot.move_robot(0, joints)
+                with simulator_lock:
+                    robot.move_robot(robot_id, joints)
+                logging.info("Robot id: %s", robot_id)
         if not stop.is_set():
             logging.warning("Connection closed by the robot")
 
 
-def run_robot(host: str, robot: UR3eRG2, stop: threading.Event) -> None:
+def run_robot(
+    host: str,
+    robot: UR3eRG2,
+    robot_id: int,
+    simulator_lock: threading.Lock,
+    stop: threading.Event,
+) -> None:
     """Keep one robot connected, reconnecting after errors, until stop is set."""
+    logging.info("Controlling simulator body ID %d", robot_id)
     while not stop.is_set():
         try:
-            stream_joints(host, robot, stop)
+            stream_joints(host, robot, robot_id, simulator_lock, stop)
         except OSError as error:
             logging.warning("Connection error: %s", error)
         except ValueError as error:
@@ -84,10 +100,24 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(threadName)s] %(message)s")
 
     stop = threading.Event()
-    threads = [
-        threading.Thread(target=run_robot, args=(host, UR3eRG2(), stop), name=host)
-        for host in dict.fromkeys(args.hosts)  # drop duplicate IPs, keep order
-    ]
+    robot = UR3eRG2()
+    simulator_lock = threading.Lock()
+    hosts = dict.fromkeys(args.hosts)  # drop duplicate IPs, keep order
+    threads = []
+    for index, host in enumerate(hosts):
+        if index == 0:
+            robot_id = 0
+        else:
+            robot_id = robot.spawn_robot(
+                [index * SPAWN_SPACING, 0, 0, 0, 0, 0]
+            )
+        threads.append(
+            threading.Thread(
+                target=run_robot,
+                args=(host, robot, robot_id, simulator_lock, stop),
+                name=host,
+            )
+        )
     for thread in threads:
         thread.start()
     try:

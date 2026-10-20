@@ -7,7 +7,7 @@ import time
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-DEFAULT_HOST = "192.168.1.157"
+DEFAULT_HOST = "10.172.18.84"
 PORT = 30003
 RECV_SIZE = 65536  # large enough to drain any backlog in one read
 TIMEOUT = 2.0  # seconds without data before the connection is considered lost
