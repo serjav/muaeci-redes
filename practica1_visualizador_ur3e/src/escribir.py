@@ -36,9 +36,8 @@ TARGET_JOINTS = [0.0, -1.5, 0.0, -1.5, 0.0, 0.0]  # rad
 JOINT_TOLERANCE = 0.01  # rad
 PROGRAM_NAME = "secuencia"  # the robot reports this name when the program starts and stops
 
-ROBOT_MESSAGE_LEVELS = {
+ROBOT_MESSAGE_LEVELS = {  # error code messages are reported by monitor_program instead
     TEXT_MESSAGE: logging.INFO,
-    ERROR_CODE_MESSAGE: logging.WARNING,
     RUNTIME_EXCEPTION_MESSAGE: logging.ERROR,
 }
 
@@ -90,13 +89,20 @@ def verify_joint_positions(target: Sequence[float], actual: list[float] | None) 
 
     errors = [abs(position - goal) for goal, position in zip(target, actual)]
     for index, (goal, position, error) in enumerate(zip(target, actual, errors), start=1):
-        logging.info(
+        logging.debug(
             "Joint %d: target=%.6f rad, actual=%.6f rad, error=%.6f rad", index, goal, position, error
         )
-    if max(errors) < JOINT_TOLERANCE:
-        logging.info("Confirmed: all joints are within %.3f rad of the target", JOINT_TOLERANCE)
+    worst = max(range(len(errors)), key=errors.__getitem__)
+    if errors[worst] < JOINT_TOLERANCE:
+        logging.info(
+            "Confirmed: all joints are within %.3f rad of the target (largest error %.6f rad, joint %d)",
+            JOINT_TOLERANCE, errors[worst], worst + 1,
+        )
         return True
-    logging.error("Joint positions differ from the target by %.3f rad or more", JOINT_TOLERANCE)
+    logging.error(
+        "Joint positions differ from the target by %.3f rad or more. Errors: [%s] rad",
+        JOINT_TOLERANCE, ", ".join(f"{error:.4f}" for error in errors),
+    )
     return False
 
 
@@ -117,6 +123,11 @@ def monitor_program(client: socket.socket, target: Sequence[float], startup_time
         for msg_type, body in extract_messages(buffer):
             if msg_type == ROBOT_MESSAGE:
                 message = log_robot_message(body)
+                if message is not None and message.message_type == ERROR_CODE_MESSAGE:
+                    # Not always a fault, so it is reported without stopping the program.
+                    logging.warning(
+                        "Robot error code while running %s: %s %s", PROGRAM_NAME, message.text, message.details
+                    )
                 if not started and is_program_event(message, PROGRAM_STARTED):
                     started = True
                     logging.info("Program %s started", PROGRAM_NAME)

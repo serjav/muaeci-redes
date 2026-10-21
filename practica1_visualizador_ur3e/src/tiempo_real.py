@@ -23,6 +23,7 @@ MAX_MSG_LEN = 4096  # real-time messages are ~1.1 KB, anything larger is corrupt
 SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 
 Mover = Callable[[list[float]], None]  # moves one simulated robot to the given joints
+StatusCallback = Callable[[str], None]  # receives connected, disconnected, unreachable or error
 
 
 def stream_joints(client: socket.socket, move: Mover, stop: threading.Event) -> None:
@@ -44,8 +45,11 @@ def stream_joints(client: socket.socket, move: Mover, stop: threading.Event) -> 
             move(list(joints))
 
 
-def run_robot(host: str, move: Mover, stop: threading.Event) -> None:
+def run_robot(
+    host: str, move: Mover, stop: threading.Event, on_status: StatusCallback | None = None
+) -> None:
     """Keep one robot connected, reconnecting after errors, until stop is set."""
+    notify = on_status or (lambda status: None)
     has_connected = False  # the robot was reached at least once
     is_down = False  # the current outage was already reported
     while not stop.is_set():
@@ -54,6 +58,7 @@ def run_robot(host: str, move: Mover, stop: threading.Event) -> None:
             with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
                 reached = True
                 logging.info("Robot %s %s", host, "reconnected" if has_connected else "connected")
+                notify("connected")
                 has_connected, is_down = True, False
                 stream_joints(client, move, stop)
                 reason = "connection closed by the robot"
@@ -61,13 +66,16 @@ def run_robot(host: str, move: Mover, stop: threading.Event) -> None:
             reason = error
         except ValueError as error:
             logging.error("%s. Stopping robot %s", error, host)
+            notify("error")
             return
         if stop.is_set():
             return
         if reached:
             logging.warning("Robot %s disconnected: %s", host, reason)
+            notify("disconnected")
         elif not is_down:
             logging.warning("Robot %s unreachable: %s", host, reason)
+            notify("unreachable")
         else:
             logging.debug("Robot %s still unreachable: %s", host, reason)
         is_down = True
@@ -78,7 +86,7 @@ def make_mover(simulator: UR3eRG2, robot_id: int, lock: threading.Lock) -> Mover
     """Return a function that moves one robot of the shared simulator, one thread at a time."""
     def move(joints: list[float]) -> None:
         with lock:
-            simulator.move_robot(robot_id, joints)
+            simulator.move_robot(robot_id, list(joints))  # move_robot extends the list it is given
     return move
 
 
