@@ -25,41 +25,53 @@ SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 Mover = Callable[[list[float]], None]  # moves one simulated robot to the given joints
 
 
-def stream_joints(host: str, move: Mover, stop: threading.Event) -> None:
+def stream_joints(client: socket.socket, move: Mover, stop: threading.Event) -> None:
     """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
-    with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
-        logging.info("Connected to %s:%d", host, PORT)
-        while not stop.is_set() and (data := client.recv(RECV_SIZE)):
-            buffer.extend(data)
-            joints = None
-            while len(buffer) >= MSG_LEN.size:
-                (msg_len,) = MSG_LEN.unpack_from(buffer)
-                if not MIN_MSG_LEN <= msg_len <= MAX_MSG_LEN:
-                    raise ValueError(f"Invalid message length: {msg_len}")
-                if len(buffer) < msg_len:
-                    break
-                joints = Q_ACTUAL.unpack_from(buffer, Q_ACTUAL_OFFSET)
-                del buffer[:msg_len]
-            # Only the newest message is applied so a slow move_robot never lags behind.
-            if joints is not None:
-                move(list(joints))
-        if not stop.is_set():
-            logging.warning("Connection closed by the robot")
+    while not stop.is_set() and (data := client.recv(RECV_SIZE)):
+        buffer.extend(data)
+        joints = None
+        while len(buffer) >= MSG_LEN.size:
+            (msg_len,) = MSG_LEN.unpack_from(buffer)
+            if not MIN_MSG_LEN <= msg_len <= MAX_MSG_LEN:
+                raise ValueError(f"Invalid message length: {msg_len}")
+            if len(buffer) < msg_len:
+                break
+            joints = Q_ACTUAL.unpack_from(buffer, Q_ACTUAL_OFFSET)
+            del buffer[:msg_len]
+        # Only the newest message is applied so a slow move_robot never lags behind.
+        if joints is not None:
+            move(list(joints))
 
 
 def run_robot(host: str, move: Mover, stop: threading.Event) -> None:
     """Keep one robot connected, reconnecting after errors, until stop is set."""
+    has_connected = False  # the robot was reached at least once
+    is_down = False  # the current outage was already reported
     while not stop.is_set():
+        reached = False
         try:
-            stream_joints(host, move, stop)
+            with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
+                reached = True
+                logging.info("Robot %s %s", host, "reconnected" if has_connected else "connected")
+                has_connected, is_down = True, False
+                stream_joints(client, move, stop)
+                reason = "connection closed by the robot"
         except OSError as error:
-            logging.warning("Connection error: %s", error)
+            reason = error
         except ValueError as error:
-            logging.error("%s. Stopping this robot", error)
+            logging.error("%s. Stopping robot %s", error, host)
             return
-        if not stop.wait(RECONNECT_DELAY):
-            logging.info("Reconnecting...")
+        if stop.is_set():
+            return
+        if reached:
+            logging.warning("Robot %s disconnected: %s", host, reason)
+        elif not is_down:
+            logging.warning("Robot %s unreachable: %s", host, reason)
+        else:
+            logging.debug("Robot %s still unreachable: %s", host, reason)
+        is_down = True
+        stop.wait(RECONNECT_DELAY)
 
 
 def make_mover(simulator: UR3eRG2, robot_id: int, lock: threading.Lock) -> Mover:

@@ -27,6 +27,7 @@ pip install -r requirements.txt
 ```bash
 python src/primaria.py                       # puerto primario (30001), IP por defecto
 python src/tiempo_real.py --hosts 192.168.1.157 192.168.1.158   # puerto de tiempo real (30003), dos robots
+python src/escribir.py --host 10.172.18.80          # envia un programa y verifica la posicion final
 ```
 
 Cada IP se atiende en su propio hilo con su propia instancia de `UR3eRG2`.
