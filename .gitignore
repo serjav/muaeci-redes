@@ -6,6 +6,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# Ejecutable generado con PyInstaller
+practica*/build/
+practica*/dist/
+
 # Entornos virtuales
 .venv/
 venv/
@@ -19,6 +23,7 @@ env/
 practica*/data/*.csv
 practica*/data/*.bin
 practica*/data/*.log
+practica*/data/*.json
 !practica*/data/.gitkeep
 
 # Editores / SO

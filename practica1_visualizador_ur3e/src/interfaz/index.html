@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UR3e · Panel de control</title>
+<link rel="stylesheet" href="/estilos.css">
+</head>
+<body>
+<div class="offline" id="offline"><span class="pill"><span class="dot err"></span>Sin conexión con el servidor. ¿Sigue en marcha interfaz_web.py?</span></div>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1b0d03" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h8"/><path d="M8 20v-4l4-7 5 2"/><circle cx="12" cy="9" r="1.6"/><path d="M17 11l2-3"/></svg>
+    </div>
+    <div>UR3e · Panel de control<small>Redes de Comunicación Industrial</small></div>
+  </div>
+  <nav id="nav">
+    <button data-page="inicio" class="active">Inicio</button>
+    <button data-page="monitor">Monitorización</button>
+    <button data-page="teach">Enseñar y reproducir</button>
+  </nav>
+  <div class="spacer"></div>
+  <span class="pill" id="vizPill"><span class="dot"></span>Visualizador cerrado</span>
+  <button class="btn" id="vizBtnTop">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg>
+    Abrir visualizador
+  </button>
+</header>
+
+<main>
+  <!-- ================= INICIO ================= -->
+  <section class="page active" id="page-inicio">
+    <div class="hero">
+      <h1>Control del <span>UR3e</span></h1>
+      <p>Monitoriza uno o varios robots por la interfaz primaria o la de tiempo real, o enseña una secuencia de puntos y reprodúcela verificando cada movimiento.</p>
+    </div>
+    <div class="home-grid">
+      <div class="card home-card" data-monitor="primaria">
+        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+        <h3>Monitorizar · interfaz primaria</h3>
+        <p>Estado y posición articular del robot a través del puerto primario.</p>
+        <div class="meta"><span class="badge">Puerto 30001</span><span class="badge">10 Hz</span></div>
+        <div class="go">Abrir →</div>
+      </div>
+      <div class="card home-card" data-monitor="tiempo_real">
+        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></div>
+        <h3>Monitorizar · tiempo real</h3>
+        <p>Posición articular a alta frecuencia a través del puerto de tiempo real.</p>
+        <div class="meta"><span class="badge rt">Puerto 30003</span><span class="badge rt">500 Hz</span></div>
+        <div class="go">Abrir →</div>
+      </div>
+      <div class="card home-card teach" data-page-link="teach">
+        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M8 16.5l7-8.5M15.5 17H8.5"/></svg></div>
+        <h3>Enseñar y reproducir</h3>
+        <p>Captura posiciones del robot, guárdalas en JSON y reprodúcelas punto a punto.</p>
+        <div class="meta"><span class="badge">Captura</span><span class="badge rt">movej + verificación</span></div>
+        <div class="go">Abrir →</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MONITORIZACIÓN ================= -->
+  <section class="page" id="page-monitor">
+    <div class="page-title">
+      <div>
+        <h1>Monitorización</h1>
+        <p>Un hilo por robot. Cada host se monitoriza por la interfaz que elijas al añadirlo.</p>
+      </div>
+    </div>
+    <div class="mon-grid">
+      <div class="card viz-card">
+        <div class="card-h"><h3>Robots en ejecución</h3><span class="muted" id="robotCount">0 robots</span></div>
+        <div class="card-b">
+          <div class="viz-banner" id="vizBanner">
+            <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></div>
+            <div style="flex:1">
+              <b id="vizTitle">Visualizador 3D cerrado</b>
+              <span class="muted" id="vizText">El visualizador UR3eRG2 se abre en una ventana aparte, junto al navegador.</span>
+            </div>
+            <button class="btn" id="vizBtnBanner">Abrir visualizador</button>
+          </div>
+          <div class="robots" id="robots"></div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <div class="card-h"><h3>Añadir robot</h3></div>
+          <form class="card-b add-form" id="addForm">
+            <label class="field">Dirección IP del robot
+              <input class="input" id="hostInput" placeholder="192.168.1.157" autocomplete="off">
+            </label>
+            <div class="segmented" id="ifaceSeg">
+              <button type="button" data-iface="primaria" class="active">Primaria · 30001</button>
+              <button type="button" data-iface="tiempo_real">Tiempo real · 30003</button>
+            </div>
+            <button class="btn primary" type="submit">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Añadir host
+            </button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Hosts en ejecución</h3><span class="muted" id="hostCount">0</span></div>
+          <div class="card-b"><div class="host-list" id="hostList"></div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Registro</h3><button class="btn ghost" style="padding:4px 10px;font-size:12px" data-clear="monitor">Limpiar</button></div>
+          <div class="log" id="log-monitor"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ENSEÑAR Y REPRODUCIR ================= -->
+  <section class="page" id="page-teach">
+    <div class="page-title">
+      <div>
+        <h1>Enseñar y reproducir</h1>
+        <p>Mueve el robot con el teach pendant y captura cada posición. Después reprodúcela punto a punto con movej.</p>
+      </div>
+    </div>
+    <div class="teach-grid">
+      <div class="card">
+        <div class="card-h">
+          <h3>Puntos capturados</h3>
+          <span class="muted unit-toggle" id="pointCount">0 puntos · rad</span>
+        </div>
+        <div class="card-b" style="display:grid;gap:14px">
+          <button class="btn primary big" id="grabBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
+            Capturar punto
+          </button>
+          <div class="points-wrap">
+            <table class="points">
+              <thead><tr><th>#</th><th>J1</th><th>J2</th><th>J3</th><th>J4</th><th>J5</th><th>J6</th><th></th></tr></thead>
+              <tbody id="pointsBody"></tbody>
+            </table>
+            <div class="empty" id="pointsEmpty"><b>Sin puntos todavía</b>Introduce el host de captura y pulsa «Capturar punto».</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h3>Configuración</h3></div>
+        <div class="card-b controls">
+          <div class="group">
+            <label class="field">Host de captura · obligatorio
+              <input class="input" id="grabHost" placeholder="192.168.1.157" autocomplete="off">
+            </label>
+            <label class="field">Host de ejecución · opcional
+              <input class="input" id="writeHost" placeholder="Igual que el de captura" autocomplete="off">
+            </label>
+            <button class="btn ghost" id="viewBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              Ver en el visualizador
+            </button>
+          </div>
+          <div class="divider"></div>
+          <div class="group">
+            <button class="btn" id="saveBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>
+              Guardar puntos en JSON
+            </button>
+            <button class="btn" id="loadBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+              Cargar JSON
+            </button>
+            <button class="btn primary" id="runBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>
+              Guardar y ejecutar
+            </button>
+          </div>
+          <div class="divider"></div>
+          <div class="progress">
+            <div class="progress-meta"><span id="progLabel">Sin ejecutar</span><span id="progPct">0 %</span></div>
+            <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+            <span class="hint" id="progHint">Cada punto se envía como un programa movej y se verifica antes de pasar al siguiente.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card log-card" style="display:flex;flex-direction:column">
+        <div class="card-h"><h3>Registro</h3><button class="btn ghost" style="padding:4px 10px;font-size:12px" data-clear="teach">Limpiar</button></div>
+        <div class="log tall" id="log-teach" style="flex:1"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-back" id="modal"><div class="card modal" id="modalBody"></div></div>
+<div class="toasts" id="toasts"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

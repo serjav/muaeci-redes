@@ -1,2 +1,26 @@
-# Dependencias de la practica 1 (anadir segun se vayan usando)
-# Instalar con: pip install -r requirements.txt
+# Dependencias de la practica 1, con las versiones probadas (Python 3.15).
+# Instalar desde esta carpeta (practica1_visualizador_ur3e/):
+#   python -m venv .venv
+#   .venv\Scripts\activate
+#   pip install -r requirements.txt
+
+# Libreria del curso (no esta en PyPI): simulador UR3e + RG2 en PyBullet
+./wheels/ur3e_rg2-0.1.0-py3-none-any.whl
+
+# Dependencias de UR3e_rg2
+numpy==2.5.4
+pybullet==3.2.7
+pybullet_planning==0.6.1
+
+# Dependencias de pybullet_planning
+ImageIO==2.38.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+meshio==5.3.5
+pillow==13.0.0
+psutil==7.2.2
+Pygments==2.21.0
+recordclass==0.24.1
+rich==15.0.0
+scipy==1.18.1
+termcolor==3.3.0
