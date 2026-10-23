@@ -6,6 +6,7 @@ import logging
 import re
 import sys
 import threading
+import time
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -20,6 +21,7 @@ from UR3e_rg2.dynamic_ur3e import UR3eRG2
 import primaria
 import tiempo_real
 from aprender_copiar import DATA_DIR, copy_sequence, format_joints, load_sequence, read_current_joints, save_sequence
+from ur_protocol import MasterBoard
 
 LOCAL_HOST = "127.0.0.1"  # the UI can move real robots, so it is never exposed to the network
 DEFAULT_PORT = 8000
@@ -46,11 +48,43 @@ FILE_PATTERN = re.compile(r"[\w\-. ]{1,100}\.json")
 LOG_SIZE = 500
 TEACH_THREAD = "ensenar"  # log records from threads with this prefix go to the teach page
 
+# Steps timed from the page's first request until the first robot data reaches it.
+STEP_FIRST_REQUEST = "First status request from the page"
+STEP_HOST_ADDED = "Host added"
+STEP_CONNECTED = "Robot connected"
+STEP_FIRST_JOINTS = "First joints received from the robot"
+STEP_DELIVERED = "Joints delivered to the page"
+
 
 class ApiError(Exception):
     def __init__(self, status: HTTPStatus, message: str) -> None:
         super().__init__(message)
         self.status = status
+
+
+class Timeline:
+    """Print, once each, how long every step takes from the page's first request to the first data."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.times: dict[str, float] = {}
+
+    def mark(self, step: str) -> None:
+        if step in self.times:  # fast path: called on every poll and every robot message
+            return
+        with self.lock:
+            if step in self.times or (step != STEP_FIRST_REQUEST and STEP_FIRST_REQUEST not in self.times):
+                return
+            now = time.perf_counter()
+            previous = max(self.times.values(), default=now)
+            self.times[step] = now
+            start = self.times[STEP_FIRST_REQUEST]
+            print(f"[timing] {step:<38} +{now - previous:7.3f} s   (since first request {now - start:7.3f} s)", flush=True)
+            if step == STEP_DELIVERED:
+                print(f"[timing] TOTAL first request -> data on the page: {now - start:.3f} s", flush=True)
+                if STEP_HOST_ADDED in self.times:
+                    added = self.times[STEP_HOST_ADDED]
+                    print(f"[timing]   of which after the host was added:  {now - added:.3f} s", flush=True)
 
 
 class LogBuffer(logging.Handler):
@@ -183,15 +217,22 @@ class Visualizer:
 class Monitor:
     """Monitored hosts, each streaming joints in its own thread."""
 
-    def __init__(self, visualizer: Visualizer) -> None:
+    def __init__(self, visualizer: Visualizer, timeline: Timeline) -> None:
         self.lock = threading.Lock()
         self.visualizer = visualizer
+        self.timeline = timeline
         self.hosts: dict[str, dict] = {}
 
     def add(self, host: str, interface: str) -> None:
         if interface not in INTERFACES:
             raise ApiError(HTTPStatus.BAD_REQUEST, f"Interfaz desconocida: {interface}")
-        entry = {"interface": interface, "status": "connecting", "joints": None, "stop": threading.Event()}
+        entry = {
+            "interface": interface,
+            "status": "connecting",
+            "joints": None,
+            "mode_selector": None,  # operationalModeSelectorInput, primary interface only
+            "stop": threading.Event(),
+        }
         with self.lock:
             if host in self.hosts:
                 raise ApiError(HTTPStatus.CONFLICT, f"El robot {host} ya está en la lista")
@@ -200,15 +241,31 @@ class Monitor:
         def move(joints: list[float]) -> None:
             if not entry["stop"].is_set():  # a removed host may still deliver one last message
                 entry["joints"] = list(joints)
+                self.timeline.mark(STEP_FIRST_JOINTS)
                 self.visualizer.move(host, joints)
 
         def on_status(status: str) -> None:
             entry["status"] = status
+            if status == "connected":
+                self.timeline.mark(STEP_CONNECTED)
 
+        def on_masterboard(masterboard: MasterBoard) -> None:
+            selector = masterboard.operational_mode_selector_input
+            if not entry["stop"].is_set() and selector != entry["mode_selector"]:
+                entry["mode_selector"] = selector
+                logging.info("Robot %s operational mode selector input: %d", host, selector)
+
+        self.timeline.mark(STEP_HOST_ADDED)
         logging.info("Robot %s added (%s interface)", host, interface)
         self.visualizer.attach(host)
+        # Master Board Data only comes through the primary interface.
+        extra = {"on_masterboard": on_masterboard} if interface == "primaria" else {}
         threading.Thread(
-            target=INTERFACES[interface], args=(host, move, entry["stop"], on_status), name=host, daemon=True
+            target=INTERFACES[interface],
+            args=(host, move, entry["stop"], on_status),
+            kwargs=extra,
+            name=host,
+            daemon=True,
         ).start()
 
     def remove(self, host: str) -> None:
@@ -238,6 +295,7 @@ class Monitor:
                 "interface": entry["interface"],
                 "status": entry["status"],
                 "joints": entry["joints"],
+                "mode_selector": entry["mode_selector"],
                 "body": self.visualizer.body_of(host),
             }
             for host, entry in items
@@ -258,6 +316,34 @@ class Teacher:
         self.decision_ids = itertools.count(1)  # lets the page tell two failures at the same point apart
         self.answer = ""
         self.answered = threading.Event()
+        self.mode_host: str | None = None  # capture host whose operational mode is shown
+        self.mode_selector: int | None = None
+        self.mode_stop = threading.Event()
+
+    def watch_mode(self, host: str | None) -> None:
+        """Follow the operational mode selector of the capture host through the primary interface."""
+        with self.lock:
+            if host == self.mode_host:
+                return
+            self.mode_stop.set()
+            self.mode_host, self.mode_selector = host, None
+            self.mode_stop = stop = threading.Event()
+        if host is None:
+            return
+
+        def on_masterboard(masterboard: MasterBoard) -> None:
+            selector = masterboard.operational_mode_selector_input
+            if not stop.is_set() and selector != self.mode_selector:
+                self.mode_selector = selector
+                logging.info("Robot %s operational mode selector input: %d", host, selector)
+
+        threading.Thread(
+            target=primaria.run_robot,
+            args=(host, lambda joints: None, stop),
+            kwargs={"on_masterboard": on_masterboard},
+            name=f"{TEACH_THREAD}-modo",
+            daemon=True,
+        ).start()
 
     def _check_idle(self) -> None:
         if self.running:
@@ -380,6 +466,7 @@ class Teacher:
                 "running": self.running,
                 "progress": dict(self.progress),
                 "decision": self.decision,
+                "mode": {"host": self.mode_host, "value": self.mode_selector},
             }
 
 
@@ -400,15 +487,20 @@ def host_field(data: dict) -> str:
 class App:
     def __init__(self, log_buffer: LogBuffer) -> None:
         self.log_buffer = log_buffer
+        self.timeline = Timeline()
         self.visualizer = Visualizer()
-        self.monitor = Monitor(self.visualizer)
+        self.monitor = Monitor(self.visualizer, self.timeline)
         self.teacher = Teacher(log_buffer)
 
     def state(self, query: dict) -> dict:
+        self.timeline.mark(STEP_FIRST_REQUEST)
         logs, next_log = self.log_buffer.since(int(query.get("desde", 0)))
+        hosts = self.monitor.snapshot()
+        if any(host["joints"] is not None for host in hosts):
+            self.timeline.mark(STEP_DELIVERED)
         return {
             "visualizer": self.visualizer.is_open,
-            "hosts": self.monitor.snapshot(),
+            "hosts": hosts,
             "teach": self.teacher.snapshot(),
             "logs": logs,
             "next_log": next_log,
@@ -447,6 +539,10 @@ class App:
     def decide(self, data: dict) -> None:
         self.teacher.decide(text_field(data, "option"))
 
+    def watch_mode(self, data: dict) -> None:
+        host = data.get("host")
+        self.teacher.watch_mode(host_field(data) if isinstance(host, str) and host.strip() else None)
+
 
 ROUTES = {
     ("GET", "/api/estado"): App.state,
@@ -460,6 +556,7 @@ ROUTES = {
     ("POST", "/api/ensenar/cargar"): App.load,
     ("POST", "/api/ensenar/ejecutar"): App.execute,
     ("POST", "/api/ensenar/decision"): App.decide,
+    ("POST", "/api/ensenar/modo"): App.watch_mode,
 }
 
 
@@ -566,6 +663,7 @@ def main() -> int:
         logging.info("Stopped by user")
     finally:
         app.monitor.stop_all()
+        app.teacher.watch_mode(None)
         server.server_close()
     return 0
 
