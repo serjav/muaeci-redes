@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
-from ur_protocol import ROBOT_STATE, extract_messages, parse_joint_positions
+from ur_protocol import ROBOT_STATE, MasterBoard, extract_messages, parse_joint_positions, parse_masterboard
 
 # TODO: always ask for the robot IP before starting any robot instead of relying on this default.
 DEFAULT_HOST = "10.172.18.80"
@@ -19,25 +19,39 @@ SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 
 Mover = Callable[[list[float]], None]  # moves one simulated robot to the given joints
 StatusCallback = Callable[[str], None]  # receives connected, disconnected, unreachable or error
+MasterBoardCallback = Callable[[MasterBoard], None]  # receives the newest Master Board Data
 
 
-def stream_joints(client: socket.socket, move: Mover, stop: threading.Event) -> None:
+def stream_joints(
+    client: socket.socket,
+    move: Mover,
+    stop: threading.Event,
+    on_masterboard: MasterBoardCallback | None = None,
+) -> None:
     """Move the robot with the joint positions received until the connection ends."""
     buffer = bytearray()
     while not stop.is_set() and (data := client.recv(RECV_SIZE)):
         buffer.extend(data)
-        joints = None
+        joints = masterboard = None
         for msg_type, body in extract_messages(buffer):
             if msg_type == ROBOT_STATE:
                 joints = parse_joint_positions(body) or joints
+                if on_masterboard:
+                    masterboard = parse_masterboard(body) or masterboard
         # Only the newest message is applied so a slow move_robot never lags behind.
         if joints is not None:
             logging.debug("Joint positions: %s", joints)
             move(joints)
+        if masterboard is not None:
+            on_masterboard(masterboard)
 
 
 def run_robot(
-    host: str, move: Mover, stop: threading.Event, on_status: StatusCallback | None = None
+    host: str,
+    move: Mover,
+    stop: threading.Event,
+    on_status: StatusCallback | None = None,
+    on_masterboard: MasterBoardCallback | None = None,
 ) -> None:
     """Keep one robot connected, reconnecting after errors, until stop is set."""
     notify = on_status or (lambda status: None)
@@ -51,7 +65,7 @@ def run_robot(
                 logging.info("Robot %s %s", host, "reconnected" if has_connected else "connected")
                 notify("connected")
                 has_connected, is_down = True, False
-                stream_joints(client, move, stop)
+                stream_joints(client, move, stop, on_masterboard)
                 reason = "connection closed by the robot"
         except OSError as error:
             reason = error

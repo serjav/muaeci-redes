@@ -221,3 +221,32 @@ main { max-width: 1440px; margin: 0 auto; padding: 28px; }
 .file-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; width: 100%; }
 .file-row span:first-child { font-family: var(--mono); }
 
+
+/* ---------- Master Board inputs ---------- */
+.io-tile { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border); }
+.io-tile.changed { animation: flash 1.2s ease; }
+.io-ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--blue-soft); color: #8fcaf0; flex: none; }
+.io-label { font-size: 12.5px; }
+.io-hint { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.io-val { margin-left: auto; font-family: var(--mono); font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* ---------- Operational mode (Manual / Automatic) ---------- */
+.mode-card { display: flex; align-items: center; gap: 14px; padding: 10px 16px 10px 10px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); }
+.mode-card.changed { animation: flash 1.2s ease; }
+.mode-badge {
+  width: 64px; height: 64px; border-radius: 12px; flex: none;
+  display: grid; place-items: center; align-content: center; gap: 3px;
+  background: #2b2e33; color: #fff; border: 2px solid #3b4049;
+}
+.mode-icon { line-height: 0; }
+.mode-name { font-size: 11px; font-weight: 600; letter-spacing: .01em; }
+.mode-info { display: grid; gap: 1px; font-size: 12px; }
+.mode-host { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.mode-raw { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.mode-card.manual .mode-badge, .io-tile.manual .io-ico { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(251, 191, 36, .15); }
+.mode-card.automatic .mode-badge, .io-tile.automatic .io-ico { border-color: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, .15); }
+.io-tile .io-ico { background: #2b2e33; color: #fff; border: 2px solid #3b4049; }
+.io-tile.manual .io-val { color: var(--warn); }
+.io-tile.automatic .io-val { color: var(--ok); }
+.io-tile .io-val { font-size: 16px; }
+@media (max-width: 900px) { .page-title { flex-wrap: wrap; } }

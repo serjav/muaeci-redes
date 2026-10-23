@@ -12,8 +12,14 @@ ROBOT_MESSAGE = 20
 # Robot State sub-packages
 ROBOT_MODE_DATA = 0
 JOINT_DATA = 1
+MASTERBOARD_DATA = 3
 ROBOT_MODE = struct.Struct(">Q7?")  # timestamp + 7 status flags
 JOINT_RECORD = struct.Struct(">dddffffB")  # one joint in the Joint Data sub-package
+# Master Board Data: I/O, analog values and power, up to euromap67InterfaceInstalled
+MASTERBOARD = struct.Struct(">iiBBddbbddffffBBb")
+EUROMAP = struct.Struct(">IIff")  # only present when the Euromap67 interface is installed
+# UR internal uint32, operationalModeSelectorInput, threePositionEnablingDeviceInput, UR internal byte
+MASTERBOARD_TAIL = struct.Struct(">IBBB")
 
 # Robot Message types
 TEXT_MESSAGE = 0
@@ -48,6 +54,28 @@ class RobotMode(NamedTuple):
     protective_stopped: bool
     program_running: bool
     program_paused: bool
+
+
+class MasterBoard(NamedTuple):
+    digital_input_bits: int
+    digital_output_bits: int
+    analog_input_range0: int
+    analog_input_range1: int
+    analog_input0: float
+    analog_input1: float
+    analog_output_domain0: int
+    analog_output_domain1: int
+    analog_output0: float
+    analog_output1: float
+    masterboard_temperature: float
+    robot_voltage_48v: float
+    robot_current: float
+    master_io_current: float
+    safety_mode: int
+    in_reduced_mode: int
+    euromap67_installed: int
+    operational_mode_selector_input: int
+    three_position_enabling_device_input: int
 
 
 class RobotMessage(NamedTuple):
@@ -97,6 +125,20 @@ def parse_robot_mode(robot_state: bytes) -> RobotMode | None:
     for sub_type, body in iter_subpackages(robot_state):
         if sub_type == ROBOT_MODE_DATA and len(body) >= ROBOT_MODE.size:
             return RobotMode._make(ROBOT_MODE.unpack_from(body))
+    return None
+
+
+def parse_masterboard(robot_state: bytes) -> MasterBoard | None:
+    """Return the Master Board Data of a Robot State body, or None if absent."""
+    for sub_type, body in iter_subpackages(robot_state):
+        if sub_type != MASTERBOARD_DATA or len(body) < MASTERBOARD.size:
+            continue
+        fields = MASTERBOARD.unpack_from(body)
+        offset = MASTERBOARD.size + (EUROMAP.size if fields[-1] else 0)  # last field: Euromap67 installed
+        if len(body) < offset + MASTERBOARD_TAIL.size:
+            return None
+        _, selector, enabling_device, _ = MASTERBOARD_TAIL.unpack_from(body, offset)
+        return MasterBoard(*fields, selector, enabling_device)
     return None
 
 

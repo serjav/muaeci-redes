@@ -16,7 +16,14 @@ const INTERFACE = {
   tiempo_real: ["tiempo real · 500 Hz", "rt"],
 };
 const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`;
-const ICON_CROSS = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const ICON_SELECTOR = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 12l4-4"/><circle cx="12" cy="12" r="1.5"/></svg>`;
+const ICON_MANUAL = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`;
+const ICON_AUTOMATIC = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M22 12a1 1 0 0 1-10 0 1 1 0 0 0-10 0"/><path d="M7 20.7a1 1 0 1 1 5-8.7 1 1 0 1 0 5-8.6"/><path d="M7 3.3a1 1 0 1 1 5 8.6 1 1 0 1 0 5 8.6"/></svg>`;
+const MODES = {  // operationalModeSelectorInput values, with the names shown on the UR pendant
+  1: { name: "Manual", icon: ICON_MANUAL, cls: "manual" },
+  0: { name: "Automatic", icon: ICON_AUTOMATIC, cls: "automatic" },
+};
+const ICON_CROSS =`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 
 const $ = id => document.getElementById(id);
 const ui = {
@@ -162,7 +169,9 @@ function renderHosts(hosts) {
   }
   for (const host of hosts) {
     const card = document.querySelector(`.robot[data-host="${CSS.escape(host.host)}"]`);
-    if (card) paintJoints(card, host.joints);
+    if (!card) continue;
+    paintJoints(card, host.joints);
+    paintModeSelector(card, host);
   }
 }
 
@@ -205,7 +214,12 @@ function buildRobotCards(hosts) {
     card.dataset.host = host.host;
     card.innerHTML = `<div class="robot-h"><span class="dot ${dot}"></span><span class="ip"></span>
       <span class="badge ${ifaceClass}"></span><span class="body"></span></div>
-      ${[1, 2, 3, 4, 5, 6].map(n => `<div class="joint"><span class="name">J${n}</span><div class="bar"><i></i></div><span class="val">—</span></div>`).join("")}`;
+      ${[1, 2, 3, 4, 5, 6].map(n => `<div class="joint"><span class="name">J${n}</span><div class="bar"><i></i></div><span class="val">—</span></div>`).join("")}
+      <div class="io-tile">
+        <span class="io-ico">${ICON_SELECTOR}</span>
+        <div><div class="io-label">Modo de operación</div><div class="io-hint">operationalModeSelectorInput</div></div>
+        <span class="io-val">—</span>
+      </div>`;
     card.querySelector(".ip").textContent = host.host;
     card.querySelector(".badge").textContent = ifaceLabel;
     card.querySelector(".body").textContent = host.body === null ? "sin visualizador" : `cuerpo ${host.body}`;
@@ -226,6 +240,39 @@ function paintJoints(card, joints) {
     bar.style.width = Math.abs(fraction) * 50 + "%";
     row.querySelector(".val").textContent = joints[index].toFixed(4) + " rad";
   });
+}
+
+function modeInfo(value) {
+  if (value === null || value === undefined) return { name: "—", icon: ICON_SELECTOR, cls: "" };
+  return MODES[value] || { name: `Desconocido (${value})`, icon: ICON_SELECTOR, cls: "unknown" };
+}
+
+function flash(element) {
+  element.classList.remove("changed");
+  void element.offsetWidth;  // restart the highlight animation
+  element.classList.add("changed");
+}
+
+function paintModeSelector(card, host) {
+  const tile = card.querySelector(".io-tile");
+  if (host.interface !== "primaria") {
+    tile.querySelector(".io-val").textContent = "N/D";
+    tile.querySelector(".io-hint").textContent = "Solo disponible por la interfaz primaria";
+    return;
+  }
+  const value = host.mode_selector;
+  const text = value === null ? "—" : String(value);
+  if (tile.dataset.value === text) return;
+  const changed = tile.dataset.value !== undefined && value !== null;
+  tile.dataset.value = text;
+  const mode = modeInfo(value);
+  tile.className = `io-tile ${mode.cls}`;
+  tile.querySelector(".io-ico").innerHTML = mode.icon;
+  tile.querySelector(".io-val").textContent = mode.name;
+  tile.querySelector(".io-hint").textContent = value === null
+    ? "operationalModeSelectorInput"
+    : `operationalModeSelectorInput = ${value}`;
+  if (changed) flash(tile);
 }
 
 function addHost(host, iface, button) {
@@ -263,6 +310,31 @@ function renderTeach(teach) {
   for (const id of ["grabBtn", "saveBtn", "loadBtn", "runBtn"]) $(id).disabled = teach.running;
   renderProgress(teach.progress);
   renderDecision(teach.decision);
+  renderTeachMode(teach.mode);
+}
+
+function renderTeachMode(mode) {
+  const card = $("teachMode");
+  const key = JSON.stringify(mode);
+  if (card.dataset.key === key) return;
+  const previous = card.dataset.key ? JSON.parse(card.dataset.key) : null;
+  card.dataset.key = key;
+  const info = modeInfo(mode.value);
+  card.className = `mode-card ${info.cls}`;
+  card.querySelector(".mode-icon").innerHTML = info.icon;
+  card.querySelector(".mode-name").textContent = info.name;
+  card.querySelector(".mode-host").textContent = mode.host || "Sin host de captura";
+  card.querySelector(".mode-raw").textContent = mode.host === null
+    ? "Introduce el host de captura"
+    : mode.value === null ? "Esperando datos del robot…" : `operationalModeSelectorInput = ${mode.value}`;
+  if (previous && previous.host === mode.host && previous.value !== null && mode.value !== null) flash(card);
+  // After a page reload the server may still follow a capture host the field no longer shows.
+  const input = $("grabHost");
+  if (mode.host && !input.value.trim() && document.activeElement !== input) input.value = mode.host;
+}
+
+function watchMode(host) {
+  return action(() => api("/api/ensenar/modo", { host }));
 }
 
 function renderPoints(teach) {
@@ -402,7 +474,10 @@ function openLoad(button) {
       row.lastChild.textContent = file.modified;
       row.onclick = () => action(async () => {
         const { host } = await api("/api/ensenar/cargar", { name: file.name });
-        if (!$("grabHost").value.trim()) $("grabHost").value = host;
+        if (!$("grabHost").value.trim()) {
+          $("grabHost").value = host;
+          watchMode(host);
+        }
         closeModal();
         toast("ok", `Secuencia ${file.name} cargada`);
       }, row);
@@ -442,6 +517,10 @@ $("addForm").onsubmit = event => {
   const host = requireHost(input, "Introduce una dirección IP válida");
   if (host) addHost(host, ui.iface, event.submitter).then(added => { if (added) input.value = ""; });
 };
+$("grabHost").addEventListener("change", () => {
+  const host = $("grabHost").value.trim();
+  if (!host || HOST_PATTERN.test(host)) watchMode(host);  // an empty field stops following the robot
+});
 $("grabBtn").onclick = event => {
   const host = grabHost();
   if (host) action(() => api("/api/ensenar/capturar", { host }), event.currentTarget);
