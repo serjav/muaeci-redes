@@ -4,11 +4,13 @@ import itertools
 import json
 import logging
 import re
+import socket
 import sys
 import threading
 import time
 import webbrowser
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,7 +23,7 @@ from UR3e_rg2.dynamic_ur3e import UR3eRG2
 import primaria
 import tiempo_real
 from aprender_copiar import DATA_DIR, copy_sequence, format_joints, load_sequence, read_current_joints, save_sequence
-from ur_protocol import MasterBoard
+from ur_protocol import DASHBOARD_PORT, REMOTE_CONTROL_QUERY, MasterBoard, ask_dashboard, parse_remote_control
 
 LOCAL_HOST = "127.0.0.1"  # the UI can move real robots, so it is never exposed to the network
 DEFAULT_PORT = 8000
@@ -47,6 +49,7 @@ HOST_PATTERN = re.compile(r"[A-Za-z0-9.\-]{1,253}")
 FILE_PATTERN = re.compile(r"[\w\-. ]{1,100}\.json")
 LOG_SIZE = 500
 TEACH_THREAD = "ensenar"  # log records from threads with this prefix go to the teach page
+REMOTE_INTERVAL = 1.0  # seconds between remote control queries to the Dashboard Server
 
 # Steps timed from the page's first request until the first robot data reaches it.
 STEP_FIRST_REQUEST = "First status request from the page"
@@ -214,6 +217,41 @@ class Visualizer:
             pass
 
 
+def watch_remote_control(host: str, stop: threading.Event, on_change: Callable[[bool | None], None]) -> None:
+    """Ask the Dashboard Server every REMOTE_INTERVAL whether the robot is in remote control.
+
+    on_change receives True, False, or None when the robot cannot or does not answer.
+    """
+    reported = None  # last problem logged, so it is not repeated every second
+    while not stop.is_set():
+        try:
+            with (
+                socket.create_connection((host, DASHBOARD_PORT), timeout=primaria.TIMEOUT) as client,
+                client.makefile("rw", encoding="ascii", newline="\n") as stream,
+            ):
+                stream.readline()  # welcome message
+                reported = None
+                while not stop.is_set():
+                    answer = ask_dashboard(stream, REMOTE_CONTROL_QUERY)
+                    remote = parse_remote_control(answer)
+                    if remote is None and reported != answer:
+                        logging.warning("Robot %s cannot report remote control: %s", host, answer)
+                        reported = answer
+                    on_change(remote)
+                    stop.wait(REMOTE_INTERVAL)
+        except OSError as error:
+            if reported != str(error):
+                logging.warning("Robot %s Dashboard Server unavailable: %s", host, error)
+                reported = str(error)
+            on_change(None)
+        stop.wait(primaria.RECONNECT_DELAY)
+
+
+def log_remote_change(host: str, remote: bool | None) -> None:
+    if remote is not None:
+        logging.info("Robot %s remote control: %s", host, "on" if remote else "off (local)")
+
+
 class Monitor:
     """Monitored hosts, each streaming joints in its own thread."""
 
@@ -231,6 +269,7 @@ class Monitor:
             "status": "connecting",
             "joints": None,
             "mode_selector": None,  # operationalModeSelectorInput, primary interface only
+            "remote": None,  # remote control from the Dashboard Server, primary interface only
             "stop": threading.Event(),
         }
         with self.lock:
@@ -255,6 +294,11 @@ class Monitor:
                 entry["mode_selector"] = selector
                 logging.info("Robot %s operational mode selector input: %d", host, selector)
 
+        def on_remote(remote: bool | None) -> None:
+            if not entry["stop"].is_set() and remote != entry["remote"]:
+                entry["remote"] = remote
+                log_remote_change(host, remote)
+
         self.timeline.mark(STEP_HOST_ADDED)
         logging.info("Robot %s added (%s interface)", host, interface)
         self.visualizer.attach(host)
@@ -267,6 +311,10 @@ class Monitor:
             name=host,
             daemon=True,
         ).start()
+        if interface == "primaria":
+            threading.Thread(
+                target=watch_remote_control, args=(host, entry["stop"], on_remote), name=host, daemon=True
+            ).start()
 
     def remove(self, host: str) -> None:
         with self.lock:
@@ -296,6 +344,7 @@ class Monitor:
                 "status": entry["status"],
                 "joints": entry["joints"],
                 "mode_selector": entry["mode_selector"],
+                "remote": entry["remote"],
                 "body": self.visualizer.body_of(host),
             }
             for host, entry in items
@@ -318,18 +367,25 @@ class Teacher:
         self.answered = threading.Event()
         self.mode_host: str | None = None  # capture host whose operational mode is shown
         self.mode_selector: int | None = None
+        self.remote_control: bool | None = None  # None until the Dashboard Server answers
         self.mode_stop = threading.Event()
 
     def watch_mode(self, host: str | None) -> None:
-        """Follow the operational mode selector of the capture host through the primary interface."""
+        """Follow the capture host's operational mode (primary interface) and remote control (Dashboard)."""
         with self.lock:
             if host == self.mode_host:
                 return
             self.mode_stop.set()
-            self.mode_host, self.mode_selector = host, None
+            self.mode_host, self.mode_selector, self.remote_control = host, None, None
             self.mode_stop = stop = threading.Event()
         if host is None:
             return
+        threading.Thread(
+            target=watch_remote_control,
+            args=(host, stop, lambda remote: self._set_remote(host, stop, remote)),
+            name=f"{TEACH_THREAD}-remoto",
+            daemon=True,
+        ).start()
 
         def on_masterboard(masterboard: MasterBoard) -> None:
             selector = masterboard.operational_mode_selector_input
@@ -344,6 +400,12 @@ class Teacher:
             name=f"{TEACH_THREAD}-modo",
             daemon=True,
         ).start()
+
+    def _set_remote(self, host: str, stop: threading.Event, remote: bool | None) -> None:
+        if stop.is_set() or remote == self.remote_control:
+            return
+        self.remote_control = remote
+        log_remote_change(host, remote)
 
     def _check_idle(self) -> None:
         if self.running:
@@ -466,7 +528,7 @@ class Teacher:
                 "running": self.running,
                 "progress": dict(self.progress),
                 "decision": self.decision,
-                "mode": {"host": self.mode_host, "value": self.mode_selector},
+                "mode": {"host": self.mode_host, "value": self.mode_selector, "remote": self.remote_control},
             }
 
 

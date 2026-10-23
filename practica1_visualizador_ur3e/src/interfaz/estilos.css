@@ -250,3 +250,27 @@ main { max-width: 1440px; margin: 0 auto; padding: 28px; }
 .io-tile.automatic .io-val { color: var(--ok); }
 .io-tile .io-val { font-size: 16px; }
 @media (max-width: 900px) { .page-title { flex-wrap: wrap; } }
+
+/* ---------- Remote control (Dashboard Server) ---------- */
+.title-status { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+.remote-btn {
+  display: grid; place-items: center; align-content: center; gap: 2px; min-width: 96px; padding: 10px 14px;
+  border-radius: 14px; border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  cursor: default; transition: background .3s, border-color .3s, color .3s, box-shadow .3s, opacity .3s, filter .3s;
+}
+.remote-name { font-weight: 650; font-size: 13px; }
+.remote-state { font-size: 11px; font-family: var(--mono); }
+.remote-btn.on {
+  color: #b9f5dc; border-color: rgba(52, 211, 153, .65);
+  background: linear-gradient(180deg, rgba(52, 211, 153, .24), rgba(52, 211, 153, .08));
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .15), 0 0 20px rgba(52, 211, 153, .25);
+}
+.remote-btn.off { filter: grayscale(1); opacity: .55; }
+.remote-btn.unknown { opacity: .4; border-style: dashed; }
+.remote-btn.changed { animation: flash 1.2s ease; }
+
+/* ---------- Robot card: operational mode + remote side by side ---------- */
+.io-row { display: flex; gap: 10px; align-items: stretch; margin-top: 12px; }
+.io-row .io-tile { flex: 1; margin-top: 0; min-width: 0; }
+.remote-btn.compact { min-width: 76px; padding: 6px 10px; border-radius: 10px; }
+.remote-btn.compact svg { width: 18px; height: 18px; }

@@ -123,13 +123,21 @@
         <h1>Enseñar y reproducir</h1>
         <p>Mueve el robot con el teach pendant y captura cada posición. Después reprodúcela punto a punto con movej.</p>
       </div>
-      <div class="mode-card" id="teachMode">
-        <div class="mode-badge"><span class="mode-icon"></span><span class="mode-name">—</span></div>
-        <div class="mode-info">
-          <span class="muted">Modo de operación</span>
-          <b class="mode-host">Sin host de captura</b>
-          <span class="mode-raw">operationalModeSelectorInput</span>
+      <div class="title-status">
+        <div class="mode-card" id="teachMode">
+          <div class="mode-badge"><span class="mode-icon"></span><span class="mode-name">—</span></div>
+          <div class="mode-info">
+            <span class="muted">Modo de operación</span>
+            <b class="mode-host">Sin host de captura</b>
+            <span class="mode-raw">operationalModeSelectorInput</span>
+          </div>
         </div>
+        <!-- Shows the Dashboard Server state only: Local/Remote can only be switched on the pendant -->
+        <button class="remote-btn unknown" id="remoteBtn" type="button" aria-disabled="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+          <span class="remote-name">Remoto</span>
+          <span class="remote-state">sin datos</span>
+        </button>
       </div>
     </div>
     <div class="teach-grid">
