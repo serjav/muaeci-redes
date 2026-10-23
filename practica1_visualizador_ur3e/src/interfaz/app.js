@@ -19,6 +19,7 @@ const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" 
 const ICON_SELECTOR = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 12l4-4"/><circle cx="12" cy="12" r="1.5"/></svg>`;
 const ICON_MANUAL = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`;
 const ICON_AUTOMATIC = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M22 12a1 1 0 0 1-10 0 1 1 0 0 0-10 0"/><path d="M7 20.7a1 1 0 1 1 5-8.7 1 1 0 1 0 5-8.6"/><path d="M7 3.3a1 1 0 1 1 5 8.6 1 1 0 1 0 5 8.6"/></svg>`;
+const ICON_REMOTE = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>`;
 const MODES = {  // operationalModeSelectorInput values, with the names shown on the UR pendant
   1: { name: "Manual", icon: ICON_MANUAL, cls: "manual" },
   0: { name: "Automatic", icon: ICON_AUTOMATIC, cls: "automatic" },
@@ -172,6 +173,8 @@ function renderHosts(hosts) {
     if (!card) continue;
     paintJoints(card, host.joints);
     paintModeSelector(card, host);
+    const remote = card.querySelector(".remote-btn");
+    if (remote) paintRemoteButton(remote, host.remote);
   }
 }
 
@@ -215,10 +218,13 @@ function buildRobotCards(hosts) {
     card.innerHTML = `<div class="robot-h"><span class="dot ${dot}"></span><span class="ip"></span>
       <span class="badge ${ifaceClass}"></span><span class="body"></span></div>
       ${[1, 2, 3, 4, 5, 6].map(n => `<div class="joint"><span class="name">J${n}</span><div class="bar"><i></i></div><span class="val">—</span></div>`).join("")}
-      <div class="io-tile">
-        <span class="io-ico">${ICON_SELECTOR}</span>
-        <div><div class="io-label">Modo de operación</div><div class="io-hint">operationalModeSelectorInput</div></div>
-        <span class="io-val">—</span>
+      <div class="io-row">
+        <div class="io-tile">
+          <span class="io-ico">${ICON_SELECTOR}</span>
+          <div><div class="io-label">Modo de operación</div><div class="io-hint">operationalModeSelectorInput</div></div>
+          <span class="io-val">—</span>
+        </div>
+        ${host.interface === "primaria" ? remoteButtonHtml("compact") : ""}
       </div>`;
     card.querySelector(".ip").textContent = host.host;
     card.querySelector(".badge").textContent = ifaceLabel;
@@ -327,10 +333,41 @@ function renderTeachMode(mode) {
   card.querySelector(".mode-raw").textContent = mode.host === null
     ? "Introduce el host de captura"
     : mode.value === null ? "Esperando datos del robot…" : `operationalModeSelectorInput = ${mode.value}`;
-  if (previous && previous.host === mode.host && previous.value !== null && mode.value !== null) flash(card);
+  if (previous && previous.host === mode.host && previous.value !== null && mode.value !== null
+      && previous.value !== mode.value) flash(card);
+  renderRemote(mode);
   // After a page reload the server may still follow a capture host the field no longer shows.
   const input = $("grabHost");
   if (mode.host && !input.value.trim() && document.activeElement !== input) input.value = mode.host;
+}
+
+const REMOTE_STATES = {
+  on: ["activo", "En control remoto: acepta los programas enviados por la red"],
+  off: ["local", "En control local: no ejecutará los programas enviados por la red. Se cambia en el teach pendant"],
+  unknown: ["sin datos", "El Dashboard Server (puerto 29999) no ha respondido o no admite «is in remote control»"],
+};
+
+function remoteButtonHtml(extraClass = "") {
+  return `<button class="remote-btn unknown ${extraClass}" type="button" aria-disabled="true">
+    ${ICON_REMOTE}<span class="remote-name">Remoto</span><span class="remote-state">sin datos</span></button>`;
+}
+
+function paintRemoteButton(button, remote) {
+  const state = remote === true ? "on" : remote === false ? "off" : "unknown";
+  if (button.dataset.state === state) return;
+  const changed = button.dataset.state !== undefined && button.dataset.state !== "unknown" && state !== "unknown";
+  button.dataset.state = state;
+  const [label, help] = REMOTE_STATES[state];
+  for (const name of ["on", "off", "unknown"]) button.classList.toggle(name, name === state);
+  button.title = help;
+  button.querySelector(".remote-state").textContent = label;
+  if (changed) flash(button);
+}
+
+function renderRemote(mode) {
+  const button = $("remoteBtn");
+  paintRemoteButton(button, mode.remote);
+  if (mode.host === null) button.title = "Introduce el host de captura";
 }
 
 function watchMode(host) {

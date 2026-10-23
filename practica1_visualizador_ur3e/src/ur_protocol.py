@@ -1,7 +1,11 @@
 """Decoding of the UR primary interface messages, shared by primaria.py and escribir.py."""
 import struct
 from collections.abc import Iterator
-from typing import NamedTuple
+from typing import NamedTuple, TextIO
+
+# Dashboard Server: plain text, one command and one answer per line
+DASHBOARD_PORT = 29999
+REMOTE_CONTROL_QUERY = "is in remote control"  # answers true or false (e-Series, PolyScope 5.6 or later)
 
 HEADER = struct.Struct(">iB")  # length (int32) + type (uint8), used by messages and sub-packages
 MAX_MSG_LEN = 2**20  # 1 MiB; primary messages vary in size, anything larger is corrupt
@@ -140,6 +144,21 @@ def parse_masterboard(robot_state: bytes) -> MasterBoard | None:
         _, selector, enabling_device, _ = MASTERBOARD_TAIL.unpack_from(body, offset)
         return MasterBoard(*fields, selector, enabling_device)
     return None
+
+
+def ask_dashboard(stream: TextIO, command: str) -> str:
+    """Send one Dashboard Server command and return its answer without the line break."""
+    stream.write(command + "\n")
+    stream.flush()
+    answer = stream.readline()
+    if not answer:
+        raise ConnectionError("Connection closed by the Dashboard Server")
+    return answer.strip()
+
+
+def parse_remote_control(answer: str) -> bool | None:
+    """Return the answer to REMOTE_CONTROL_QUERY as a bool, or None if the robot cannot report it."""
+    return {"true": True, "false": False}.get(answer.lower())
 
 
 def parse_robot_message(body: bytes) -> RobotMessage | None:
