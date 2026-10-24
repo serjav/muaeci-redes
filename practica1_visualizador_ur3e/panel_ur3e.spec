@@ -4,10 +4,10 @@
 from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
-    ["src/interfaz_web.py"],
+    ["src/visualizador_ur3e/web/interfaz_web.py"],
     pathex=["src"],
     datas=[
-        ("src/interfaz", "interfaz"),  # web page
+        ("src/visualizador_ur3e/web/interfaz", "interfaz"),  # web page
         *collect_data_files("UR3e_rg2"),  # robot URDF and meshes
     ],
 )

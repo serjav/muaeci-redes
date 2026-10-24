@@ -5,7 +5,7 @@ import sys
 import time
 from collections.abc import Sequence
 
-from ur_protocol import (
+from visualizador_ur3e.comun.ur_protocol import (
     ERROR_CODE_MESSAGE,
     KEY_MESSAGE,
     PROGRAM_STARTED,

@@ -9,13 +9,13 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from escribir import DEFAULT_HOST, PORT, RECV_SIZE, TIMEOUT, write_and_verify
-from ur_protocol import ROBOT_STATE, extract_messages, parse_joint_positions
+from visualizador_ur3e.comun.ur_protocol import ROBOT_STATE, extract_messages, parse_joint_positions
+from visualizador_ur3e.control.escribir import DEFAULT_HOST, PORT, RECV_SIZE, TIMEOUT, write_and_verify
 
 # Next to the .exe once packed with PyInstaller (its own files live in a temporary folder),
-# otherwise the project's data folder.
+# otherwise the project's data folder (practica1_visualizador_ur3e/data).
 DATA_DIR = (
-    Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+    Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[3]
 ) / "data"
 FILE_VERSION = 1
 JOINT_COUNT = 6

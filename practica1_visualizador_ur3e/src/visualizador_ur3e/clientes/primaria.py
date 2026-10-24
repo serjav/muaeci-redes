@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
-from ur_protocol import ROBOT_STATE, MasterBoard, extract_messages, parse_joint_positions, parse_masterboard
+from visualizador_ur3e.comun.ur_protocol import ROBOT_STATE, MasterBoard, extract_messages, parse_joint_positions, parse_masterboard
 
 # TODO: always ask for the robot IP before starting any robot instead of relying on this default.
 DEFAULT_HOST = "10.172.18.80"

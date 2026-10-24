@@ -26,6 +26,9 @@ practica*/data/*.log
 practica*/data/*.json
 !practica*/data/.gitkeep
 
+# Librería del curso UR3e_rg2: se obtiene de la asignatura, no se redistribuye
+practica*/wheels/*.whl
+
 # Editores / SO
 .vscode/
 .idea/
