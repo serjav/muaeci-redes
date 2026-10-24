@@ -20,10 +20,9 @@ from urllib.parse import parse_qsl, urlparse
 import pybullet
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-import primaria
-import tiempo_real
-from aprender_copiar import DATA_DIR, copy_sequence, format_joints, load_sequence, read_current_joints, save_sequence
-from ur_protocol import DASHBOARD_PORT, REMOTE_CONTROL_QUERY, MasterBoard, ask_dashboard, parse_remote_control
+from visualizador_ur3e.clientes import primaria, tiempo_real
+from visualizador_ur3e.control.aprender_copiar import DATA_DIR, copy_sequence, format_joints, load_sequence, read_current_joints, save_sequence
+from visualizador_ur3e.comun.ur_protocol import DASHBOARD_PORT, REMOTE_CONTROL_QUERY, MasterBoard, ask_dashboard, parse_remote_control
 
 LOCAL_HOST = "127.0.0.1"  # the UI can move real robots, so it is never exposed to the network
 DEFAULT_PORT = 8000

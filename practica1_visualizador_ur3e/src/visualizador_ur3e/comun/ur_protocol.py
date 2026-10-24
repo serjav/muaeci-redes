@@ -1,4 +1,4 @@
-"""Decoding of the UR primary interface messages, shared by primaria.py and escribir.py."""
+"""Decoding of the UR primary interface and Dashboard Server messages, shared by every tool."""
 import struct
 from collections.abc import Iterator
 from typing import NamedTuple, TextIO

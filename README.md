@@ -1,13 +1,15 @@
-# Master Universitario en Automatizacion, Electronica y Control Industrial
-## Redes de Comunicacion Industrial
-Repositorio de trabajaos relacionados con el curso Redes de Comunicación Industrial
+# Máster Universitario en Automatización, Electrónica y Control Industrial
+## Redes de Comunicación Industrial
 
-### Practica 1. Visualizador UR3e
-El script se encargara de muestrear los datos provenientes de un Robot UR3e y visualizarlos en python.
+Repositorio de los trabajos de la asignatura Redes de Comunicación Industrial.
 
-Codigo en [`practica1_visualizador_ur3e/`](practica1_visualizador_ur3e/).
+## Prácticas
+
+| Práctica | Descripción |
+|---|---|
+| [Práctica 1. Visualizador UR3e](practica1_visualizador_ur3e/) | Monitorización de robots UR3e por las interfaces primaria y de tiempo real, visualizador 3D, movimiento verificado, aprender y copiar, y panel web local (también como ejecutable). Instrucciones completas en su [README](practica1_visualizador_ur3e/README.md). |
 
 ## Estructura del repositorio
 
-Cada practica vive en su propia carpeta `practicaN_<nombre>/`, con su codigo,
-pruebas, datos, documentacion y dependencias independientes.
+Cada práctica vive en su propia carpeta `practicaN_<nombre>/`, con su código,
+documentación y dependencias independientes.
