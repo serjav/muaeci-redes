@@ -2,7 +2,8 @@ import logging
 
 from modbus_tcp import (ModbusTCP, read_coils, read_discrete_inputs,
                         read_holding_register, read_input_registers, write_coil,
-                        write_registry)
+                        read_write_multiple_registries, write_multiple_coils,
+                        write_multiple_registries, write_registry)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,6 +45,26 @@ def main():
         print("Wrote coil 3 ON, echo:", echoed)
         values = read_coils(client, init_addr=3, qty=1)
         print("Read back coil 3:", values)
+
+        # Write 4 registers starting at 200 (one is negative), then read them back
+        qty = write_multiple_registries(client, init_addr=200, values=[10, 20, -30, 40])
+        print("Wrote registers 200-203, echoed qty:", qty)
+        values = read_holding_register(client, init_addr=200, qty=4)
+        print("Read back registers 200-203:", values)
+
+        # Write 10 coils starting at 20 (spans 2 bytes: 0x0D then 0x03), read them back
+        coils = [True, False, True, True, False, False, False, False, True, True]
+        qty = write_multiple_coils(client, init_addr=20, values=coils)
+        print("Wrote coils 20-29, echoed qty:", qty)
+        values = read_coils(client, init_addr=20, qty=10)
+        print("Read back coils 20-29:", values)
+        print("Match:", values == coils)
+
+        # Write 3 registers at 300 and read the same 3 in ONE request. The server
+        # writes first, then reads, so we get the new values back (-333 -> 65203).
+        values = read_write_multiple_registries(client, read_addr=300, read_qty=3,
+                                                write_addr=300, write_values=[111, 222, -333])
+        print("Read/write registers 300-302:", values)
     finally:
         client.close()   # always close, even if the read raised an error
 
