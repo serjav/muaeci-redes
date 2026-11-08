@@ -62,8 +62,42 @@ SIGNED16 = ranged(-32768, 32767)
 BIT = ranged(0, 1)
 
 
+MAIN_EXAMPLES = """\
+ejemplos:
+  python modbus_cli.py leer-coils 0 8                   leer 8 coils desde la 0
+  python modbus_cli.py leer-entradas 0 8                leer 8 entradas discretas
+  python modbus_cli.py leer-holding 0 10                leer 10 holding registers
+  python modbus_cli.py leer-input 0 4                   leer 4 input registers
+  python modbus_cli.py escribir-coil 5 1                coil 5 = 1
+  python modbus_cli.py escribir-registro 100 -20        registro 100 = -20
+  python modbus_cli.py escribir-coils 10 1 0 1 1 0      coils 10..14 = 1,0,1,1,0
+  python modbus_cli.py escribir-registros 100 10 -20 0x1F
+                                                        registros 100..102
+  python modbus_cli.py leer-escribir 0 4 10 1 2 3       leer 4 desde 0 y escribir
+                                                        1,2,3 desde 10 (1 peticion)
+
+opciones globales (van ANTES del comando):
+  python modbus_cli.py --ip 192.168.1.10 --puerto 1502 --unidad 1 leer-holding 0 10
+  python modbus_cli.py --traza --timeout 5 leer-coils 0 8
+
+los enteros aceptan decimal (10), hex (0x0A) y binario (0b1010).
+ayuda de un comando: python modbus_cli.py escribir-coils --help
+
+codigos de salida: 0 OK, 2 argumento invalido, 3 excepcion Modbus,
+                   4 timeout, 5 error de conexion, 6 error de protocolo
+"""
+
+
+def add_command(sub, name, help_text, example):
+    """Add a subcommand whose --help ends with a usage example."""
+    return sub.add_parser(name, help=help_text, epilog=f"ejemplo:\n  {example}",
+                          formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
 def build_parser():
-    parser = ArgParser(prog="modbus_cli.py", description="Cliente Modbus TCP")
+    parser = ArgParser(prog="modbus_cli.py", description="Cliente Modbus TCP",
+                       epilog=MAIN_EXAMPLES,
+                       formatter_class=argparse.RawDescriptionHelpFormatter)
     # Global options, in the order requested
     parser.add_argument("--ip", default="127.0.0.1", metavar="IP",
                         help="direccion del servidor (por defecto 127.0.0.1)")
@@ -79,32 +113,40 @@ def build_parser():
     sub = parser.add_subparsers(dest="comando", required=True, metavar="COMANDO")
 
     for name in READ_BITS:
-        p = sub.add_parser(name, help="leer bits")
+        p = add_command(sub, name, "leer bits", f"python modbus_cli.py {name} 0 8")
         p.add_argument("direccion", type=ADDRESS)
         p.add_argument("cantidad", type=ranged(1, MAX_READ_BITS))
 
     for name in READ_REGS:
-        p = sub.add_parser(name, help="leer registros")
+        p = add_command(sub, name, "leer registros", f"python modbus_cli.py {name} 0 10")
         p.add_argument("direccion", type=ADDRESS)
         p.add_argument("cantidad", type=ranged(1, MAX_READ_REGS))
 
-    p = sub.add_parser("escribir-coil", help="escribir un coil (0 o 1)")
+    p = add_command(sub, "escribir-coil", "escribir un coil (0 o 1)",
+                    "python modbus_cli.py escribir-coil 5 1")
     p.add_argument("direccion", type=ADDRESS)
     p.add_argument("valor", type=BIT)
 
-    p = sub.add_parser("escribir-registro", help="escribir un registro (con signo)")
+    p = add_command(sub, "escribir-registro", "escribir un registro (con signo)",
+                    "python modbus_cli.py escribir-registro 100 -20")
     p.add_argument("direccion", type=ADDRESS)
     p.add_argument("valor", type=SIGNED16)
 
-    p = sub.add_parser("escribir-coils", help="escribir varios coils (0 o 1)")
+    p = add_command(sub, "escribir-coils", "escribir varios coils (0 o 1)",
+                    "python modbus_cli.py escribir-coils 10 1 0 1 1 0\n"
+                    "  (coils 10..14 = 1,0,1,1,0; valores separados por espacios)")
     p.add_argument("direccion", type=ADDRESS)
     p.add_argument("valores", type=BIT, nargs="+")
 
-    p = sub.add_parser("escribir-registros", help="escribir varios registros (con signo)")
+    p = add_command(sub, "escribir-registros", "escribir varios registros (con signo)",
+                    "python modbus_cli.py escribir-registros 100 10 -20 0x1F\n"
+                    "  (registros 100..102 = 10,-20,31)")
     p.add_argument("direccion", type=ADDRESS)
     p.add_argument("valores", type=SIGNED16, nargs="+")
 
-    p = sub.add_parser("leer-escribir", help="escribir y leer registros en una peticion")
+    p = add_command(sub, "leer-escribir", "escribir y leer registros en una peticion",
+                    "python modbus_cli.py leer-escribir 0 4 10 1 2 3\n"
+                    "  (lee 4 registros desde 0; escribe 1,2,3 desde 10)")
     p.add_argument("dir_lectura", type=ADDRESS)
     p.add_argument("cantidad", type=ranged(1, MAX_READ_REGS))
     p.add_argument("dir_escritura", type=ADDRESS)
