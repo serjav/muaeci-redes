@@ -6,6 +6,7 @@ import threading
 from configuracion import DEFAULT_CONFIG, load_settings
 
 RECV_SIZE = 4096
+ACCEPT_TIMEOUT = 1.0  # seconds accept() waits before trying again
 
 
 class ServidorEco:
@@ -16,9 +17,15 @@ class ServidorEco:
         """Accept connections until Ctrl+C. Each one is answered in its own thread."""
         with socket.create_server(self.address) as server:
             print(f"Servidor de eco escuchando en {self.address[0]}:{self.address[1]} (Ctrl+C para parar)")
+            # With a time limit, accept() returns every second: Windows only sees Ctrl+C then
+            server.settimeout(ACCEPT_TIMEOUT)
             try:
                 while True:
-                    connection, address = server.accept()
+                    try:
+                        connection, address = server.accept()
+                    except TimeoutError:
+                        continue  # no client yet: keep waiting
+                    connection.settimeout(None)  # the echo itself waits without limit
                     # daemon: these threads end with the program, there is nothing to close in order
                     threading.Thread(target=self.echo, args=(connection, address), daemon=True).start()
             except KeyboardInterrupt:

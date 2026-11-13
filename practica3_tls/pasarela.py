@@ -164,9 +164,14 @@ class Pasarela:
         address = (self.settings["ip_escucha"], self.settings["puerto_escucha"])
         with socket.create_server(address) as server:
             logging.info("Pasarela escuchando en %s:%d (Ctrl+C para parar)", *address)
+            # With a time limit, accept() returns every second: Windows only sees Ctrl+C then
+            server.settimeout(POLL_TIMEOUT)
             try:
                 while True:
-                    connection, client_address = server.accept()
+                    try:
+                        connection, client_address = server.accept()
+                    except TimeoutError:
+                        continue  # no client yet: keep waiting
                     self.start_session(connection, client_address)
             except KeyboardInterrupt:
                 logging.info("Parada solicitada: no se aceptan más conexiones")
