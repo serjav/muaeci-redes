@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-from configuracion import DEFAULT_CONFIG, load_settings
+from configuracion import DEFAULT_CONFIG, ErrorConfiguracion, check_tls_files, file_path, load_settings
 
 # Make the practica 1 package importable: it lives in the folder next to this one
 PRACTICA1_SRC = Path(__file__).resolve().parent.parent / "practica1_visualizador_ur3e" / "src"
@@ -38,11 +38,11 @@ def create_context(settings, password):
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.minimum_version = ssl.TLSVersion.TLSv1_3  # only TLS 1.3
     # Trust only the lab CA (the system CAs are never loaded)
-    context.load_verify_locations(cafile=Path(settings["ca"]).expanduser())
+    context.load_verify_locations(cafile=file_path(settings, "ca"))
     # Identity of the client: its certificate and its encrypted private key
     context.load_cert_chain(
-        Path(settings["certificado"]).expanduser(),
-        Path(settings["clave"]).expanduser(),
+        file_path(settings, "certificado"),
+        file_path(settings, "clave"),
         password=password,
     )
     return context
@@ -161,12 +161,15 @@ def create_client(config_path, direct):
         settings = load_settings(config_path, "cliente")
         password = None
         if not direct:
+            check_tls_files(settings)  # a missing file is reported before asking for the password
             password = getpass.getpass("Contraseña de la clave privada del cliente: ")
         return ClienteSeguro(settings, password, direct)
     except ssl.SSLError as error:
         raise ErrorCliente(f"No se puede cargar el certificado o la clave (¿contraseña incorrecta?): {error}") from error
-    except (OSError, ValueError, KeyError) as error:
-        raise ErrorCliente(f"Configuración no válida: {error!r}") from error
+    except ErrorConfiguracion as error:
+        raise ErrorCliente(f"Configuración: {error}") from error
+    except KeyError as error:
+        raise ErrorCliente(f'Configuración: falta el dato {error} en la sección "cliente" de {config_path}') from error
 
 
 def show_read(client):

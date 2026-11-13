@@ -8,9 +8,8 @@ import logging
 import socket
 import ssl
 import threading
-from pathlib import Path
 
-from configuracion import DEFAULT_CONFIG, load_settings
+from configuracion import DEFAULT_CONFIG, ErrorConfiguracion, check_tls_files, file_path, load_settings
 
 RECV_SIZE = 4096
 CONNECT_TIMEOUT = 5.0  # seconds to open the TCP connection with the destination
@@ -23,12 +22,12 @@ def create_context(settings, password):
     context.minimum_version = ssl.TLSVersion.TLSv1_3  # only TLS 1.3
     # Identity of the gateway: its certificate and its encrypted private key
     context.load_cert_chain(
-        Path(settings["certificado"]).expanduser(),
-        Path(settings["clave"]).expanduser(),
+        file_path(settings, "certificado"),
+        file_path(settings, "clave"),
         password=password,
     )
     # Trust only the lab CA (the system CAs are never loaded)
-    context.load_verify_locations(cafile=Path(settings["ca"]).expanduser())
+    context.load_verify_locations(cafile=file_path(settings, "ca"))
     context.verify_mode = ssl.CERT_REQUIRED  # every client must present a certificate
     return context
 
@@ -215,14 +214,19 @@ def run_gateway(config_path, trace=False):
     """Load the configuration, ask for the key password and start the gateway."""
     try:
         settings = load_settings(config_path, "pasarela")
+        check_tls_files(settings)  # a missing file is reported before asking for the password
         password = getpass.getpass("Contraseña de la clave privada de la pasarela: ")
         gateway = Pasarela(settings, password)
         setup_logging(settings["fichero_registro"], trace)
         gateway.serve()
     except ssl.SSLError as error:
-        print(f"No se puede cargar el certificado o la clave (¿contraseña incorrecta?): {error}")
-    except (OSError, ValueError, KeyError) as error:
-        print(f"No se puede arrancar la pasarela: {error!r}")
+        print(f"ERROR: no se puede cargar el certificado o la clave (¿contraseña incorrecta?): {error}")
+    except ErrorConfiguracion as error:
+        print(f"ERROR de configuración: {error}")
+    except KeyError as error:
+        print(f'ERROR de configuración: falta el dato {error} en la sección "pasarela" de {config_path}')
+    except OSError as error:  # for example, the IP is not of this PC or the port is in use
+        print(f"ERROR: no se puede arrancar la pasarela: {error}")
 
 
 def main():

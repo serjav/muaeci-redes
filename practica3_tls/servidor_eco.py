@@ -3,7 +3,7 @@ import argparse
 import socket
 import threading
 
-from configuracion import DEFAULT_CONFIG, load_settings
+from configuracion import DEFAULT_CONFIG, ErrorConfiguracion, load_settings
 
 RECV_SIZE = 4096
 ACCEPT_TIMEOUT = 1.0  # seconds accept() waits before trying again
@@ -49,8 +49,12 @@ def run_echo_server(config_path):
         settings = load_settings(config_path, "pasarela")
         server = ServidorEco(settings["ip_destino"], settings["puerto_destino"])
         server.serve()
-    except (OSError, ValueError, KeyError) as error:
-        print(f"No se puede arrancar el servidor de eco: {error!r}")
+    except ErrorConfiguracion as error:
+        print(f"ERROR de configuración: {error}")
+    except KeyError as error:
+        print(f'ERROR de configuración: falta el dato {error} en la sección "pasarela" de {config_path}')
+    except OSError as error:  # for example, the port is in use
+        print(f"ERROR: no se puede arrancar el servidor de eco: {error}")
 
 
 def main():
