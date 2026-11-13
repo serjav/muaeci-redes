@@ -4,6 +4,7 @@ import socket
 import threading
 import time
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 from visualizador_ur3e.comun.ur_protocol import ROBOT_STATE, MasterBoard, extract_messages, parse_joint_positions, parse_masterboard
@@ -20,6 +21,12 @@ SPAWN_SPACING = 0.8  # meters between additional robots in the simulator
 Mover = Callable[[list[float]], None]  # moves one simulated robot to the given joints
 StatusCallback = Callable[[str], None]  # receives connected, disconnected, unreachable or error
 MasterBoardCallback = Callable[[MasterBoard], None]  # receives the newest Master Board Data
+Connector = Callable[[str], AbstractContextManager[socket.socket]]  # opens the connection with a host
+
+
+def connect_tcp(host: str) -> socket.socket:
+    """Open the plain TCP connection with the primary port of the robot."""
+    return socket.create_connection((host, PORT), timeout=TIMEOUT)
 
 
 def stream_joints(
@@ -52,15 +59,20 @@ def run_robot(
     stop: threading.Event,
     on_status: StatusCallback | None = None,
     on_masterboard: MasterBoardCallback | None = None,
+    connect: Connector = connect_tcp,
 ) -> None:
-    """Keep one robot connected, reconnecting after errors, until stop is set."""
+    """Keep one robot connected, reconnecting after errors, until stop is set.
+
+    connect opens the connection: plain TCP by default, or TLS through the gateway
+    (see primaria_segura.py).
+    """
     notify = on_status or (lambda status: None)
     has_connected = False  # the robot was reached at least once
     is_down = False  # the current outage was already reported
     while not stop.is_set():
         reached = False
         try:
-            with socket.create_connection((host, PORT), timeout=TIMEOUT) as client:
+            with connect(host) as client:
                 reached = True
                 logging.info("Robot %s %s", host, "reconnected" if has_connected else "connected")
                 notify("connected")

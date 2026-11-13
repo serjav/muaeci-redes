@@ -89,13 +89,21 @@
         <div class="card">
           <div class="card-h"><h3>Añadir robot</h3></div>
           <form class="card-b add-form" id="addForm">
-            <label class="field">Dirección IP del robot
+            <label class="field"><span id="hostLabel">Dirección IP del robot</span>
               <input class="input" id="hostInput" placeholder="192.168.1.157" autocomplete="off">
             </label>
             <div class="segmented" id="ifaceSeg">
               <button type="button" data-iface="primaria" class="active">Primaria · 30001</button>
               <button type="button" data-iface="tiempo_real">Tiempo real · 30003</button>
             </div>
+            <label class="check">
+              <input type="checkbox" id="secureCheck">
+              <span>Conexión segura (TLS) a través de la pasarela</span>
+            </label>
+            <label class="field" id="securePassField" hidden>Contraseña de la clave del cliente
+              <input class="input" id="securePass" type="password" autocomplete="off">
+              <span class="hint">Solo interfaz primaria. Los certificados se leen del config.json de la práctica 3.</span>
+            </label>
             <button class="btn primary" type="submit">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
               Añadir host

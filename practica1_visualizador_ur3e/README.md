@@ -32,7 +32,8 @@ practica1_visualizador_ur3e/
 │       │   └── ur_protocol.py      # decodificación de la interfaz primaria y del Dashboard Server
 │       ├── clientes/               # monitorización (solo lectura)
 │       │   ├── primaria.py         # interfaz primaria, puerto 30001, 10 Hz
-│       │   └── tiempo_real.py      # interfaz de tiempo real, puerto 30003, 500 Hz
+│       │   ├── tiempo_real.py      # interfaz de tiempo real, puerto 30003, 500 Hz
+│       │   └── primaria_segura.py  # interfaz primaria a través de la pasarela TLS (práctica 3)
 │       ├── control/                # herramientas que MUEVEN el robot
 │       │   ├── escribir.py         # mover a una posición y verificarla
 │       │   └── aprender_copiar.py  # capturar posiciones y reproducirlas
@@ -225,6 +226,7 @@ se detiene con `Ctrl+C`.
 |---|---|---|
 | `--port N` | Puerto local del panel | `8000` |
 | `--no-browser` | No abrir el navegador automáticamente | desactivado |
+| `--config-tls RUTA` | `config.json` de la práctica 3, con los certificados para las conexiones seguras | `practica3_tls/config.json` |
 
 Páginas del panel:
 
@@ -232,6 +234,16 @@ Páginas del panel:
   *Tiempo real · 30003* y pulsa **Añadir host**. Cada robot muestra su estado de
   conexión, su posición articular y, por la interfaz primaria, el selector de modo de
   operación y el control remoto. Se pueden añadir y quitar robots en cualquier momento.
+- **Conexión segura (TLS)**: al marcar esta casilla en *Añadir robot*, el robot se
+  monitoriza a través de la pasarela TLS de la [práctica 3](../practica3_tls/). En ese
+  caso se escribe la **IP de la pasarela** (no la del robot) y la contraseña de la clave
+  del cliente, que solo se envía al panel local y no se guarda. La ruta de la CA, del
+  certificado y de la clave, y el puerto de la pasarela, se leen de la sección `cliente`
+  del `config.json` de la práctica 3. La pasarela reenvía un único puerto, así que la
+  conexión segura solo admite la interfaz primaria: *Tiempo real* se desactiva y el
+  indicador *Remoto* (puerto 29999) no se muestra. El robot aparece con la etiqueta
+  `TLS`. La conexión la abre `clientes/primaria_segura.py`; el resto del código es el
+  mismo que sin TLS.
 - **Abrir visualizador**: abre la ventana 3D `UR3eRG2` con un robot por host. Si se
   cierra con la X, se puede volver a abrir.
 - **Enseñar y reproducir**: indica el **host de captura** y pulsa **Capturar punto** para
