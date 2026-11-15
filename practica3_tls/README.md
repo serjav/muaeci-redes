@@ -38,6 +38,7 @@ practica3_tls/
 ├── configuracion.py     # lectura del fichero JSON de configuración
 ├── config_ejemplo.json  # configuración de ejemplo
 ├── crear_pki.sh         # Fase 1: crea la CA y los certificados con OpenSSL
+├── entrega/             # entregables E1 (registro de la PKI), E2 (diseño) y E3, y los .crt
 └── README.md            # este documento
 ```
 
