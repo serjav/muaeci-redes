@@ -21,8 +21,8 @@ No hay CA intermedia: la CA raíz firma directamente los tres certificados de eq
 
 ## 2. Tabla de certificados emitidos
 
-Datos obtenidos con
-`openssl x509 -in <certificado> -noout -subject -issuer -serial -dates -fingerprint -sha256`.
+Datos obtenidos de cada certificado con esta orden (aquí, con el de la pasarela):
+`openssl x509 -in pasarela/pasarela.crt -noout -subject -issuer -serial -dates -fingerprint -sha256`.
 
 | | CA | Pasarela | Cliente A | Cliente B |
 |---|---|---|---|---|
@@ -386,12 +386,12 @@ Los clientes no llevan SAN: la pasarela no comprueba su dirección, sino su CN.
 | Orden | Qué hace |
 |---|---|
 | `chmod 700 ca-privado` | Solo el propietario puede entrar en la carpeta de la CA |
-| `chmod 600 <clave>.key` | Solo el propietario puede leer la clave |
-| `openssl pkey -in <clave>.key -noout` | Lee la clave sin mostrarla. Si pide contraseña, la clave está cifrada |
-| `openssl x509 -in <cert> -noout -text` | Muestra el certificado completo en texto |
+| `chmod 600 pasarela/pasarela.key` | Solo el propietario puede leer la clave. Se aplica a las cuatro claves |
+| `openssl pkey -in pasarela/pasarela.key -noout` | Lee la clave sin mostrarla. Si pide contraseña, la clave está cifrada |
+| `openssl x509 -in pasarela/pasarela.crt -noout -text` | Muestra el certificado completo en texto |
 | `openssl x509 ... -subject -issuer -serial -dates -fingerprint -sha256` | Muestra solo titular, emisor, número de serie, fechas y huella SHA-256. Son los datos de la tabla |
-| `openssl req -in <csr> -noout -verify -subject` | Comprueba la firma de la petición y muestra su titular |
-| `openssl verify -CAfile ca.crt <certs>` | Comprueba que cada certificado está firmado por la CA y que la cadena llega a ella |
+| `openssl req -in pasarela/pasarela.csr -noout -verify -subject` | Comprueba la firma de la petición y muestra su titular |
+| `openssl verify -CAfile publico/ca.crt pasarela/pasarela.crt cliente-a/cliente-a.crt cliente-b/cliente-b.crt` | Comprueba que cada certificado está firmado por la CA y que la cadena llega a ella |
 | `openssl x509 ... -pubkey \| openssl sha256` y `openssl pkey ... -pubout \| openssl sha256` | Calculan la huella de la clave pública sacada del certificado y de la clave privada. Si coinciden, la clave corresponde al certificado |
 
 ### Prueba de humo

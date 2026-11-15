@@ -66,26 +66,3 @@ python3 cliente_seguro.py leer            # leer la posición a través de la pa
 python3 cliente_seguro.py mover           # mover el robot y verificar la posición
 python3 cliente_seguro.py --directo leer  # lo mismo, directo al robot y sin TLS
 ```
-
-## 4. Cómo crear el fichero comprimido
-
-Desde la raíz del repositorio. `git archive` solo incluye los ficheros que están en el
-repositorio, así que no puede colarse ninguna clave ni configuración local. Antes hay que
-hacer `git add` y `git commit` de la carpeta `entrega/`.
-
-```bash
-git archive --format=zip -o <tu_nombre>_practica3.zip HEAD \
-  practica3_tls practica1_visualizador_ur3e/src
-```
-
-Comprobación de que no hay claves dentro (no debe mostrar nada):
-
-```bash
-unzip -l <tu_nombre>_practica3.zip | grep -E "\.key|\.p12|config\.json|\.log"
-```
-
-La captura de Wireshark de la demostración se añade a la entrega después:
-
-```bash
-zip <tu_nombre>_practica3.zip captura_demostracion.pcapng
-```

@@ -66,7 +66,7 @@ de estudiante y la IP de la pasarela, y solo pregunta las cuatro contraseñas (C
 pasarela, cliente-a y cliente-b), sin mostrarlas:
 
 ```bash
-./crear_pki.sh 7 10.172.21.30
+./crear_pki.sh 6 10.172.18.6
 ```
 
 Si ya existe una CA en `~/pki` no la sobrescribe. Al terminar muestra la verificación de
@@ -75,8 +75,14 @@ la cadena y los datos de cada certificado para la tabla del informe.
 Las órdenes que ejecuta son las del enunciado y se explican a continuación, por si se
 prefiere hacerlo a mano con OpenSSL 3 desde `~/pki`. La única diferencia es que el script
 pasa las contraseñas con `-passout env:` y `-passin env:` en lugar de dejar que OpenSSL
-las pregunte en cada orden. Sustituye `N` por tu número de estudiante y `10.172.21.30`
-por la IP de tu pasarela.
+las pregunte en cada orden.
+
+El número de estudiante 6 y la IP `10.172.18.6` que aparecen en los ejemplos son los de
+esta entrega. Nada del código depende de ellos: el script recibe el número y la IP como
+argumentos, y la pasarela y el cliente leen las direcciones de `config.json`, así que
+sirven para cualquier pasarela, cliente y robot. Lo único ligado a una IP concreta es el
+certificado de la pasarela, que hay que emitir de nuevo si la pasarela cambia de
+dirección.
 
 ```bash
 # Paso 1: carpetas. ca-privado solo la puede abrir su propietario
@@ -87,7 +93,7 @@ chmod 700 ca-privado
 # Paso 2: la CA (clave + certificado autofirmado, 2 años). Pide una contraseña para ca.key
 openssl req -x509 -newkey rsa:2048 -sha256 -days 730 \
   -keyout ca-privado/ca.key -out publico/ca.crt \
-  -subj "/CN=CA Robot Lab - estudiante N" \
+  -subj "/CN=CA Robot Lab - estudiante 6" \
   -addext "basicConstraints=critical,CA:TRUE" \
   -addext "keyUsage=critical,keyCertSign,cRLSign"
 ```
@@ -100,7 +106,7 @@ Paso 3: dos ficheros de extensiones en `~/pki`. Las extensiones las decide la CA
 basicConstraints = critical, CA:FALSE
 keyUsage = critical, digitalSignature
 extendedKeyUsage = serverAuth
-subjectAltName = IP:10.172.21.30
+subjectAltName = IP:10.172.18.6
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid, issuer
 ```
@@ -240,21 +246,21 @@ pasarela que los datos pasan; con el robot real son unas diez líneas por segund
 cliente, por eso está desactivado por defecto.
 
 ```
-... DEBUG ip=10.172.21.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | cliente -> destino: 9 bytes reenviados
-... DEBUG ip=10.172.21.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | destino -> cliente: 9 bytes reenviados
+... DEBUG ip=10.172.18.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | cliente -> destino: 9 bytes reenviados
+... DEBUG ip=10.172.18.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | destino -> cliente: 9 bytes reenviados
 ```
 
 ### Probar la Fase 3 (pasarela + servidor de eco)
 
-Con `ip_destino` y `puerto_destino` apuntando a tu propio PC (por ejemplo `127.0.0.1` y
+Con `ip_destino` y `puerto_destino` apuntando al propio PC (por ejemplo `127.0.0.1` y
 `4000`): arranca el servidor de eco en un terminal y la pasarela en otro. Como el
 servidor de eco no habla el protocolo del robot, se prueba con el cliente de OpenSSL: lo
 que escribas debe volver.
 
 ```bash
-openssl s_client -connect 10.172.21.30:3000 -tls1_3 \
+openssl s_client -connect 10.172.18.6:3000 -tls1_3 \
   -CAfile ~/pki/publico/ca.crt -cert ~/pki/cliente-a/cliente-a.crt -key ~/pki/cliente-a/cliente-a.key \
-  -verify_ip 10.172.21.30 -verify_return_error
+  -verify_ip 10.172.18.6 -verify_return_error
 ```
 
 ## Explicación del código
@@ -319,10 +325,10 @@ abiertas se protege con un `Lock` porque la modifican varios hilos.
 Ejemplo de líneas del registro (`pasarela.log`):
 
 ```
-2026-11-13 14:22:04,129 INFO ip=10.172.21.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | handshake correcto
-2026-11-13 14:22:04,331 INFO ip=10.172.21.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | cierre: el cliente ha cerrado la conexión
-2026-11-13 14:22:04,532 WARNING ip=10.172.21.21 cn=cliente-b tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | rechazado: el CN no está en la lista de autorizados
-2026-11-13 14:22:05,292 WARNING ip=10.172.21.21 cn=- tls=- suite=- | handshake rechazado: [SSL: PEER_DID_NOT_RETURN_A_CERTIFICATE] peer did not return a certificate
+2026-11-13 14:22:04,129 INFO ip=10.172.18.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | handshake correcto
+2026-11-13 14:22:04,331 INFO ip=10.172.18.21 cn=cliente-a tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | cierre: el cliente ha cerrado la conexión
+2026-11-13 14:22:04,532 WARNING ip=10.172.18.21 cn=cliente-b tls=TLSv1.3 suite=TLS_AES_256_GCM_SHA384 | rechazado: el CN no está en la lista de autorizados
+2026-11-13 14:22:05,292 WARNING ip=10.172.18.21 cn=- tls=- suite=- | handshake rechazado: [SSL: PEER_DID_NOT_RETURN_A_CERTIFICATE] peer did not return a certificate
 ```
 
 ### `cliente_seguro.py`
@@ -358,10 +364,10 @@ Los fallos se convierten en `ErrorCliente` con un mensaje distinto para cada cau
 
 | Situación | Dónde se detecta | Mensaje |
 |---|---|---|
-| Pasarela inalcanzable | `connect()`, `OSError` o tiempo agotado | `No se puede alcanzar la pasarela en IP:puerto: …` |
-| Conexión rechazada | `connect()`, `ConnectionRefusedError` | `Conexión rechazada: la pasarela no escucha en IP:puerto` |
-| Certificado de la pasarela no válido | `connect()`, `SSLCertVerificationError` | `Certificado de la pasarela no válido: <motivo>` |
-| Certificado del cliente rechazado | `run()`, `SSLError` con una alerta, **en la primera lectura** | `La pasarela ha rechazado el certificado del cliente: <alerta>` |
+| Pasarela inalcanzable | `connect()`, `OSError` o tiempo agotado | `No se puede alcanzar la pasarela en 10.172.18.6:3000:` y el error de red |
+| Conexión rechazada | `connect()`, `ConnectionRefusedError` | `Conexión rechazada: la pasarela no escucha en 10.172.18.6:3000` |
+| Certificado de la pasarela no válido | `connect()`, `SSLCertVerificationError` | `Certificado de la pasarela no válido:` y la causa, por ejemplo `self-signed certificate in certificate chain` |
+| Certificado del cliente rechazado | `run()`, `SSLError` con una alerta, **en la primera lectura** | `La pasarela ha rechazado el certificado del cliente:` y la alerta, por ejemplo `SSLV3_ALERT_UNSUPPORTED_CERTIFICATE` |
 | Cerrada tras el handshake | `run()`, lectura de 0 bytes | `Conexión cerrada por la pasarela después del handshake: cliente no autorizado o robot no disponible` |
 
 En TLS 1.3 el cliente da por terminado el handshake antes de que la pasarela valide su

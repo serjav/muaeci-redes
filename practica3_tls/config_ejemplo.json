@@ -1,6 +1,6 @@
 {
   "pasarela": {
-    "ip_escucha": "10.172.21.30",
+    "ip_escucha": "10.172.18.6",
     "puerto_escucha": 3000,
     "ca": "~/pki/publico/ca.crt",
     "certificado": "~/pki/pasarela/pasarela.crt",
@@ -12,12 +12,12 @@
     "fichero_registro": "pasarela.log"
   },
   "cliente": {
-    "ip_pasarela": "10.172.21.30",
+    "ip_pasarela": "10.172.18.6",
     "puerto_pasarela": 3000,
     "ca": "~/pki/publico/ca.crt",
     "certificado": "~/pki/cliente-a/cliente-a.crt",
     "clave": "~/pki/cliente-a/cliente-a.key",
-    "ip_robot": "10.172.21.203",
+    "ip_robot": "10.172.18.80",
     "puerto_robot": 30001
   }
 }

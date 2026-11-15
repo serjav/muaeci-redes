@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-# TODO: always ask for the robot IP before starting any robot instead of relying on this default.
+# Default robot IP of the lab. Check the robot IP before starting and pass it on the command line if it differs.
 DEFAULT_HOST = "10.172.18.80"
 PORT = 30003
 RECV_SIZE = 65536  # large enough to drain any backlog in one read

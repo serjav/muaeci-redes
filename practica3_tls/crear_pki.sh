@@ -3,7 +3,7 @@
 # in ~/pki, with the same OpenSSL commands as the assignment.
 #
 # Usage:   ./crear_pki.sh <numero_estudiante> <ip_pasarela>
-# Example: ./crear_pki.sh 7 10.172.21.30
+# Example: ./crear_pki.sh 6 10.172.18.6
 # Help:    ./crear_pki.sh --help
 #
 # It only asks for the four passwords (CA, pasarela, cliente-a, cliente-b).
@@ -19,14 +19,14 @@ Crea en ~/pki la PKI de la práctica 3 (Fase 1) con OpenSSL: una CA propia y
 los certificados de la pasarela, de cliente-a y de cliente-b.
 
 Argumentos:
-  numero_estudiante  Tu número de estudiante. Va en el nombre de la CA:
-                     "CA Robot Lab - estudiante N".
+  numero_estudiante  Número de estudiante. Va en el nombre de la CA, por
+                     ejemplo "CA Robot Lab - estudiante 6".
   ip_pasarela        IP de la pasarela en la red del laboratorio. Va en la SAN
                      del certificado de la pasarela: el cliente solo acepta la
                      pasarela si se conecta a esta misma IP.
 
 Ejemplo:
-  ./crear_pki.sh 7 10.172.21.30
+  ./crear_pki.sh 6 10.172.18.6
 
 Lo único que pregunta son cuatro contraseñas, dos veces cada una y sin
 mostrarlas (mínimo 4 caracteres):
