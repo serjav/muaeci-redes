@@ -34,3 +34,9 @@ practica*/wheels/*.whl
 .idea/
 .DS_Store
 Thumbs.db
+
+# Practica 3: nunca se versionan claves privadas ni configuracion local
+*.key
+*.p12
+practica3_tls/config.json
+practica3_tls/*.log

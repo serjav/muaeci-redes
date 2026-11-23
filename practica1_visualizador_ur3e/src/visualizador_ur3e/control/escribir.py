@@ -22,14 +22,14 @@ from visualizador_ur3e.comun.ur_protocol import (
     parse_robot_mode,
 )
 
-# TODO: always ask for the robot IP before starting any robot instead of relying on this default.
+# Default robot IP of the lab. Check the robot IP before starting and pass it on the command line if it differs.
 DEFAULT_HOST = "10.172.18.80"
 PORT = 30001
 RECV_SIZE = 65536  # large enough to drain any backlog in one read
 TIMEOUT = 2.0  # seconds without data before the connection is considered lost
 STARTUP_TIMEOUT = 2.0  # seconds for the program to start running after it is sent
 
-# TODO: set acceleration and velocity to values within the lab safety limits.
+# Acceleration and velocity must stay within the lab safety limits.
 ACCELERATION = 0.5  # rad/s^2
 VELOCITY = 0.3  # rad/s
 TARGET_JOINTS = [0.0, -1.5, 0.0, -1.5, 0.0, 0.0]  # rad

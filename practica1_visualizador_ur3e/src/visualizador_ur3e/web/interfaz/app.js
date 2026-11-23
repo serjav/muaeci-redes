@@ -24,6 +24,7 @@ const MODES = {  // operationalModeSelectorInput values, with the names shown on
   1: { name: "Manual", icon: ICON_MANUAL, cls: "manual" },
   0: { name: "Automatic", icon: ICON_AUTOMATIC, cls: "automatic" },
 };
+const TLS_BADGE = `<span class="badge tls" title="Conexión segura a través de la pasarela">TLS</span>`;
 const ICON_CROSS =`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 
 const $ = id => document.getElementById(id);
@@ -162,7 +163,7 @@ function openVisualizer(button) {
 /* ======================= MONITORING ======================= */
 function renderHosts(hosts) {
   ui.hosts = hosts;
-  const key = JSON.stringify(hosts.map(h => [h.host, h.interface, h.status, h.body]));
+  const key = JSON.stringify(hosts.map(h => [h.host, h.interface, h.status, h.body, h.secure]));
   if (key !== ui.hostsKey) {
     ui.hostsKey = key;
     buildHostList(hosts);
@@ -189,11 +190,11 @@ function buildHostList(hosts) {
     row.className = "host-row";
     row.innerHTML = `<span class="dot ${dot}"></span>
       <div class="grow"><div class="ip"></div><div class="state"></div></div>
-      <span class="badge ${ifaceClass}"></span>
+      ${host.secure ? TLS_BADGE : ""}<span class="badge ${ifaceClass}"></span>
       <button class="icon-btn" title="Eliminar robot">${ICON_TRASH}</button>`;
     row.querySelector(".ip").textContent = host.host;
     row.querySelector(".state").textContent = label;
-    row.querySelector(".badge").textContent = ifaceLabel.split(" · ")[0];
+    row.querySelector(".badge:not(.tls)").textContent = ifaceLabel.split(" · ")[0];
     const button = row.querySelector("button");
     button.onclick = () => action(async () => {
       await api("/api/hosts/eliminar", { host: host.host });
@@ -216,7 +217,7 @@ function buildRobotCards(hosts) {
     card.className = "robot";
     card.dataset.host = host.host;
     card.innerHTML = `<div class="robot-h"><span class="dot ${dot}"></span><span class="ip"></span>
-      <span class="badge ${ifaceClass}"></span><span class="body"></span></div>
+      ${host.secure ? TLS_BADGE : ""}<span class="badge ${ifaceClass}"></span><span class="body"></span></div>
       ${[1, 2, 3, 4, 5, 6].map(n => `<div class="joint"><span class="name">J${n}</span><div class="bar"><i></i></div><span class="val">—</span></div>`).join("")}
       <div class="io-row">
         <div class="io-tile">
@@ -224,10 +225,10 @@ function buildRobotCards(hosts) {
           <div><div class="io-label">Modo de operación</div><div class="io-hint">operationalModeSelectorInput</div></div>
           <span class="io-val">—</span>
         </div>
-        ${host.interface === "primaria" ? remoteButtonHtml("compact") : ""}
+        ${host.interface === "primaria" && !host.secure ? remoteButtonHtml("compact") : ""}
       </div>`;
     card.querySelector(".ip").textContent = host.host;
-    card.querySelector(".badge").textContent = ifaceLabel;
+    card.querySelector(".badge:not(.tls)").textContent = ifaceLabel;
     card.querySelector(".body").textContent = host.body === null ? "sin visualizador" : `cuerpo ${host.body}`;
     robots.appendChild(card);
   }
@@ -281,12 +282,21 @@ function paintModeSelector(card, host) {
   if (changed) flash(tile);
 }
 
-function addHost(host, iface, button) {
+function addHost(host, iface, button, secure = false, password = "") {
   return action(async () => {
-    await api("/api/hosts/anadir", { host, interface: iface });
-    toast("ok", `Robot ${host} añadido`);
+    await api("/api/hosts/anadir", { host, interface: iface, secure, password });
+    toast("ok", secure ? `Pasarela ${host} añadida (conexión segura)` : `Robot ${host} añadido`);
     return true;
   }, button);
+}
+
+// A secure connection goes to the gateway, which only forwards the primary interface
+function setSecure(secure) {
+  $("secureCheck").checked = secure;
+  $("securePassField").hidden = !secure;
+  $("hostLabel").textContent = secure ? "Dirección IP de la pasarela" : "Dirección IP del robot";
+  document.querySelector('#ifaceSeg button[data-iface="tiempo_real"]').disabled = secure;
+  if (secure) setInterface("primaria");
 }
 
 /* ======================= TEACH ======================= */
@@ -538,12 +548,14 @@ function viewInVisualizer(button) {
 /* ======================= EVENTS ======================= */
 document.querySelectorAll("#nav button").forEach(button => button.onclick = () => showPage(button.dataset.page));
 document.querySelectorAll("[data-monitor]").forEach(card => card.onclick = () => {
+  if (card.dataset.monitor === "tiempo_real") setSecure(false);  // real time is not available through the gateway
   setInterface(card.dataset.monitor);
   showPage("monitor");
   $("hostInput").focus();
 });
 document.querySelector("[data-page-link]").onclick = () => showPage("teach");
 document.querySelectorAll("#ifaceSeg button").forEach(button => button.onclick = () => setInterface(button.dataset.iface));
+$("secureCheck").onchange = event => setSecure(event.target.checked);
 document.querySelectorAll("[data-clear]").forEach(button => button.onclick = () => $("log-" + button.dataset.clear).innerHTML = "");
 
 $("vizBtnTop").onclick = event => openVisualizer(event.currentTarget);
@@ -552,7 +564,10 @@ $("addForm").onsubmit = event => {
   event.preventDefault();
   const input = $("hostInput");
   const host = requireHost(input, "Introduce una dirección IP válida");
-  if (host) addHost(host, ui.iface, event.submitter).then(added => { if (added) input.value = ""; });
+  const secure = $("secureCheck").checked;
+  if (host) addHost(host, ui.iface, event.submitter, secure, $("securePass").value).then(added => {
+    if (added) { input.value = ""; $("securePass").value = ""; }
+  });
 };
 $("grabHost").addEventListener("change", () => {
   const host = $("grabHost").value.trim();

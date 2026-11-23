@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl, urlparse
 import pybullet
 from UR3e_rg2.dynamic_ur3e import UR3eRG2
 
-from visualizador_ur3e.clientes import primaria, tiempo_real
+from visualizador_ur3e.clientes import primaria, primaria_segura, tiempo_real
 from visualizador_ur3e.control.aprender_copiar import DATA_DIR, copy_sequence, format_joints, load_sequence, read_current_joints, save_sequence
 from visualizador_ur3e.comun.ur_protocol import DASHBOARD_PORT, REMOTE_CONTROL_QUERY, MasterBoard, ask_dashboard, parse_remote_control
 
@@ -254,17 +254,30 @@ def log_remote_change(host: str, remote: bool | None) -> None:
 class Monitor:
     """Monitored hosts, each streaming joints in its own thread."""
 
-    def __init__(self, visualizer: Visualizer, timeline: Timeline) -> None:
+    def __init__(self, visualizer: Visualizer, timeline: Timeline, tls_config: Path) -> None:
         self.lock = threading.Lock()
         self.visualizer = visualizer
         self.timeline = timeline
+        self.tls_config = tls_config  # practica 3 configuration file, read for secure connections
         self.hosts: dict[str, dict] = {}
 
-    def add(self, host: str, interface: str) -> None:
+    def _secure_connector(self, interface: str, password: str) -> primaria_segura.ConectorSeguro:
+        """Prepare the TLS connection with the gateway, which only carries the primary interface."""
+        if interface != "primaria":
+            raise ApiError(HTTPStatus.BAD_REQUEST, "La conexión segura solo admite la interfaz primaria")
+        try:
+            return primaria_segura.ConectorSeguro(primaria_segura.load_settings(self.tls_config), password)
+        except primaria_segura.ErrorSeguro as error:
+            raise ApiError(HTTPStatus.BAD_REQUEST, str(error))
+
+    def add(self, host: str, interface: str, secure: bool = False, password: str = "") -> None:
+        """Monitor a host. With secure, host is the gateway and the connection uses TLS."""
         if interface not in INTERFACES:
             raise ApiError(HTTPStatus.BAD_REQUEST, f"Interfaz desconocida: {interface}")
+        connector = self._secure_connector(interface, password) if secure else None
         entry = {
             "interface": interface,
+            "secure": secure,
             "status": "connecting",
             "joints": None,
             "mode_selector": None,  # operationalModeSelectorInput, primary interface only
@@ -299,10 +312,12 @@ class Monitor:
                 log_remote_change(host, remote)
 
         self.timeline.mark(STEP_HOST_ADDED)
-        logging.info("Robot %s added (%s interface)", host, interface)
+        logging.info("Robot %s added (%s interface%s)", host, interface, ", secure through the gateway" if secure else "")
         self.visualizer.attach(host)
         # Master Board Data only comes through the primary interface.
         extra = {"on_masterboard": on_masterboard} if interface == "primaria" else {}
+        if connector is not None:
+            extra["connect"] = connector.connect  # TLS with the gateway instead of TCP with the robot
         threading.Thread(
             target=INTERFACES[interface],
             args=(host, move, entry["stop"], on_status),
@@ -310,7 +325,8 @@ class Monitor:
             name=host,
             daemon=True,
         ).start()
-        if interface == "primaria":
+        # The Dashboard Server (port 29999) cannot be reached through the gateway
+        if interface == "primaria" and not secure:
             threading.Thread(
                 target=watch_remote_control, args=(host, entry["stop"], on_remote), name=host, daemon=True
             ).start()
@@ -340,6 +356,7 @@ class Monitor:
             {
                 "host": host,
                 "interface": entry["interface"],
+                "secure": entry["secure"],
                 "status": entry["status"],
                 "joints": entry["joints"],
                 "mode_selector": entry["mode_selector"],
@@ -546,11 +563,11 @@ def host_field(data: dict) -> str:
 
 
 class App:
-    def __init__(self, log_buffer: LogBuffer) -> None:
+    def __init__(self, log_buffer: LogBuffer, tls_config: Path) -> None:
         self.log_buffer = log_buffer
         self.timeline = Timeline()
         self.visualizer = Visualizer()
-        self.monitor = Monitor(self.visualizer, self.timeline)
+        self.monitor = Monitor(self.visualizer, self.timeline, tls_config)
         self.teacher = Teacher(log_buffer)
 
     def state(self, query: dict) -> dict:
@@ -571,7 +588,9 @@ class App:
         self.visualizer.open(self.monitor.host_names())
 
     def add_host(self, data: dict) -> None:
-        self.monitor.add(host_field(data), text_field(data, "interface"))
+        secure = data.get("secure") is True
+        password = data.get("password") if isinstance(data.get("password"), str) else ""
+        self.monitor.add(host_field(data), text_field(data, "interface"), secure, password)
 
     def remove_host(self, data: dict) -> None:
         self.monitor.remove(host_field(data))
@@ -703,12 +722,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Local web UI for the UR3e clients")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="local port for the web UI")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
+    parser.add_argument(
+        "--config-tls", type=Path, default=primaria_segura.DEFAULT_CONFIG,
+        help="practica 3 configuration file with the certificates for secure connections "
+             "(default: practica3_tls/config.json)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(threadName)s] %(message)s")
     log_buffer = LogBuffer()
     logging.getLogger().addHandler(log_buffer)
 
-    app = App(log_buffer)
+    app = App(log_buffer, args.config_tls)
     try:
         server = UIServer(args.port, app)
     except OSError as error:
